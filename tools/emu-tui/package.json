@@ -1,0 +1,13 @@
+{
+  "name": "emu-tui",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Keyboard-driven control panel for a running Pebble emulator (buttons, clock, accel).",
+  "bin": {
+    "emu-tui": "bin/emu-tui.js"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  }
+}
