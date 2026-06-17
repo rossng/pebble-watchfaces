@@ -1,0 +1,5 @@
+packages:
+  # Every watchface is its own Pebble Alloy project.
+  - "watchfaces/*"
+  # Shared dev tooling (e.g. the emulator control TUI).
+  - "tools/*"

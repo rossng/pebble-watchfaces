@@ -1,0 +1,25 @@
+{
+  "name": "pebble-watchfaces",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Monorepo of Pebble Alloy watchfaces written in TypeScript.",
+  "type": "module",
+  "scripts": {
+    "typecheck": "pnpm -r run typecheck",
+    "lint": "oxlint",
+    "format": "oxfmt",
+    "format:check": "oxfmt --check",
+    "new": "pebble new-project --alloy",
+    "screenshots": "node scripts/capture-screenshots.mjs",
+    "build:site": "node scripts/build-site.mjs"
+  },
+  "devDependencies": {
+    "oxfmt": "^0.55.0",
+    "oxlint": "^1.0.0",
+    "typescript": "^6.0.0"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@11.7.0"
+}
