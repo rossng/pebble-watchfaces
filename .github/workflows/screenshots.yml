@@ -1,0 +1,60 @@
+name: screenshots
+
+# Regenerate emulator screenshots and commit them. Manual-only: the Pages deploy
+# (pages.yml) is fast and SDK-free, and just embeds whatever PNGs are committed
+# under watchfaces/*/screenshots/. Run this when a watchface's look changes.
+#
+# NOTE: the emulator-in-CI path (QEMU under xvfb on a headless runner) is set up
+# but not yet verified on GitHub's runners — the local `pnpm screenshots` flow is
+# the proven one. If a run fails here, capture locally and commit the PNGs.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: screenshots
+  cancel-in-progress: true
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@main
+
+      - name: Cache Pebble SDK
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/pebble-sdk
+          key: pebble-sdk-${{ runner.os }}-v1
+
+      - name: Install deps + SDK
+        run: |
+          nix develop --command bash -euo pipefail -c '
+            pnpm install --frozen-lockfile
+            pebble sdk list 2>/dev/null | grep -q "(active)" || pebble sdk install latest
+          '
+
+      - name: Capture screenshots (headless via xvfb)
+        run: |
+          nix develop --command bash -euo pipefail -c '
+            xvfb-run -a pnpm screenshots
+          '
+
+      - name: Commit updated screenshots
+        run: |
+          if [ -n "$(git status --porcelain watchfaces/*/screenshots)" ]; then
+            git config user.name  "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add watchfaces/*/screenshots
+            git commit -m "chore: regenerate emulator screenshots"
+            git push
+          else
+            echo "No screenshot changes."
+          fi
