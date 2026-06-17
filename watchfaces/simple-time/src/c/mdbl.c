@@ -1,0 +1,21 @@
+#include <pebble.h>
+
+// Native entry point. It boots the Moddable XS machine that runs the watchface
+// JavaScript in src/embeddedjs/. You normally never need to edit this file.
+int main(void) {
+  Window *w = window_create();
+  window_stack_push(w, true);
+
+#ifdef PBL_DEBUG
+  // Built with `pebble build --debug`: enable the xsbug JavaScript debugger.
+  ModdableCreationRecord cr = {
+    .recordSize = sizeof(cr),
+    .flags = kModdableCreationFlagDebug,
+  };
+  moddable_createMachine(&cr);
+#else
+  moddable_createMachine(NULL);
+#endif
+
+  window_destroy(w);
+}

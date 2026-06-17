@@ -1,0 +1,42 @@
+{
+  "name": "simple-time",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A minimal Pebble Alloy watchface that displays the current time.",
+  "keywords": [
+    "pebble-app"
+  ],
+  "author": "Ross Gardiner",
+  "scripts": {
+    "build": "pebble build",
+    "emulator": "pebble install --emulator emery",
+    "dev": "pebble build && pebble install --emulator emery && node ../../tools/emu-tui/bin/emu-tui.js --emulator emery",
+    "reset": "pebble kill && pebble wipe",
+    "deploy:phone": "pebble install --phone \"$PEBBLE_PHONE\"",
+    "deploy:cloud": "pebble install --cloudpebble",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3"
+  },
+  "pebble": {
+    "displayName": "Simple Time",
+    "uuid": "175392b9-4200-465c-ad05-14b854721baf",
+    "projectType": "moddable",
+    "sdkVersion": "3",
+    "enableMultiJS": true,
+    "targetPlatforms": [
+      "emery",
+      "gabbro"
+    ],
+    "watchapp": {
+      "watchface": true
+    },
+    "messageKeys": [
+      "dummy"
+    ],
+    "resources": {
+      "media": []
+    }
+  }
+}
