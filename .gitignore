@@ -1,0 +1,28 @@
+# Dependencies
+node_modules/
+
+# Pebble / Moddable build output
+build/
+.pebble/
+*.pbw
+.lock-waf_*_build
+# `pebble build` runs `npm install` for the pkjs webpack toolchain; this repo uses pnpm.
+package-lock.json
+
+# TypeScript
+dist/
+*.tsbuildinfo
+
+# Generated GitHub Pages site
+_site/
+
+# Nix / direnv
+.direnv/
+result
+result-*
+
+# uv-managed pebble-tool (bootstrapped inside the dev shell)
+.pebble-tooling/
+
+# OS / editor
+.DS_Store
