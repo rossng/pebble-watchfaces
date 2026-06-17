@@ -1,0 +1,93 @@
+name: smoke
+
+# Minimal end-to-end check that the toolchain is functional: enter the Nix dev
+# shell, install workspace deps, run the static checks, then actually build the
+# example watchface with the Pebble SDK and assert a .pbw is produced.
+#
+# Running through `nix develop` is deliberate — it exercises the flake itself
+# (including the mkShellNoCC fix that keeps `STRINGS`/`AR`/… from leaking into
+# Moddable's make, which otherwise breaks the build).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: toolchain smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      # Pin to a release tag/SHA for reproducibility; @main is used here for
+      # forward-compatibility. Enables flakes + nix command out of the box.
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@main
+
+      # The Pebble SDK (QEMU + ARM toolchain + Moddable) is a large download.
+      # Cache it between runs. pebble-tool itself is re-bootstrapped via uv each
+      # run (cheap) so its venv never points at a stale interpreter.
+      - name: Cache Pebble SDK
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/pebble-sdk
+          key: pebble-sdk-${{ runner.os }}-v1
+
+      # First entry builds the flake and bootstraps pebble-tool. Echoing STRINGS
+      # documents the env-leak fix: it must be empty.
+      - name: Prime dev shell
+        run: |
+          nix develop --command bash -c '
+            echo "STRINGS=[$STRINGS] AR=[$AR] CC=[$CC]   # must all be empty"
+            node --version && pnpm --version && python3 --version && uv --version && pebble --version
+          '
+
+      - name: Install workspace deps
+        run: nix develop --command pnpm install --frozen-lockfile
+
+      - name: Type-check
+        run: nix develop --command pnpm typecheck
+
+      - name: Lint
+        run: nix develop --command pnpm lint
+
+      - name: Format check
+        run: nix develop --command pnpm format:check
+
+      - name: Install Pebble SDK (skip if restored from cache)
+        run: |
+          nix develop --command bash -euo pipefail -c '
+            if pebble sdk list 2>/dev/null | grep -q "(active)"; then
+              echo "Pebble SDK already installed:"
+              pebble sdk list | sed -n "1,3p"
+            else
+              pebble sdk install latest
+            fi
+          '
+
+      - name: Build example watchface (end-to-end → .pbw)
+        run: |
+          nix develop --command bash -euo pipefail -c '
+            cd watchfaces/simple-time
+            pnpm build
+            test -f build/simple-time.pbw
+            ls -la build/*.pbw
+          '
+
+      - name: Upload .pbw artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: simple-time-pbw
+          path: watchfaces/simple-time/build/*.pbw
+          if-no-files-found: error
