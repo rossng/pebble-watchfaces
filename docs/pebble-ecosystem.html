@@ -1,0 +1,1660 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>The Pebble Stack — a field guide</title>
+    <meta
+      name="description"
+      content="A skimmable map of the Pebble developer ecosystem: which SDK, library, CLI and cloud service runs on which layer, and what's current vs legacy."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;500;600;700&family=Silkscreen:wght@400;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: #f3f2ee;
+        --panel: #ffffff;
+        --panel-2: #f0efe8;
+        --ink: #0b0b0c;
+        --ink-dim: #5c5c61;
+        --line: #0b0b0c; /* chunky black borders */
+        --hair: #d9d8d2; /* soft divider */
+        --core: #ff4b00; /* Core Devices — official, current */
+        --core-soft: #ffe1d3;
+        --rebble: #7b3ff2; /* Rebble — community */
+        --rebble-soft: #e9defb;
+        --legacy: #9a9a9a; /* legacy / superseded */
+        --future: #ffc400; /* future / uncertain */
+        --watch: #00a99a;
+        --phone: #0a5cff;
+        --cloud: #ff2d8e;
+        --radius: 10px;
+        --shadow: 4px 4px 0 var(--ink);
+        --shadow-lg: 6px 6px 0 var(--ink);
+        --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+        --pixel: "Pixelify Sans", system-ui, sans-serif;
+        --label: "Silkscreen", "Pixelify Sans", ui-monospace, monospace;
+        --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html {
+        scroll-behavior: smooth;
+      }
+      body {
+        margin: 0;
+        font-family: var(--sans);
+        background-color: var(--bg);
+        background-image: radial-gradient(var(--hair) 1.3px, transparent 1.3px);
+        background-size: 18px 18px;
+        background-position: -9px -9px;
+        color: var(--ink);
+        line-height: 1.5;
+        -webkit-font-smoothing: antialiased;
+      }
+      a {
+        color: var(--core);
+        text-decoration: none;
+        font-weight: 600;
+      }
+      a:hover {
+        text-decoration: underline;
+      }
+      .wrap {
+        max-width: 1180px;
+        margin: 0 auto;
+        padding: 0 20px 120px;
+      }
+
+      /* ---------- header ---------- */
+      header.hero {
+        padding: 52px 20px 28px;
+        max-width: 1180px;
+        margin: 0 auto;
+      }
+      .kicker {
+        font-family: var(--label);
+        font-size: 11px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--core);
+        margin: 0 0 14px;
+      }
+      h1 {
+        font-family: var(--pixel);
+        font-weight: 600;
+        font-size: clamp(36px, 6vw, 64px);
+        line-height: 0.98;
+        margin: 0 0 16px;
+        letter-spacing: 0;
+      }
+      h1 .sub {
+        display: block;
+        font-family: var(--sans);
+        color: var(--ink-dim);
+        font-weight: 500;
+        font-size: clamp(15px, 2.2vw, 20px);
+        margin-top: 12px;
+        line-height: 1.4;
+      }
+      .lede {
+        max-width: 720px;
+        color: var(--ink-dim);
+        font-size: 17px;
+      }
+      .lede b {
+        color: var(--ink);
+        font-weight: 700;
+      }
+
+      /* ---------- nav ---------- */
+      nav.toc {
+        position: sticky;
+        top: 0;
+        z-index: 40;
+        background: rgba(243, 242, 238, 0.9);
+        backdrop-filter: blur(8px);
+        border-bottom: 2px solid var(--line);
+        margin-bottom: 30px;
+      }
+      nav.toc .inner {
+        max-width: 1180px;
+        margin: 0 auto;
+        padding: 10px 20px;
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+      nav.toc a {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--ink-dim);
+        padding: 5px 11px;
+        border-radius: 7px;
+        border: 2px solid transparent;
+      }
+      nav.toc a:hover {
+        color: var(--ink);
+        background: var(--core);
+        border-color: var(--line);
+        text-decoration: none;
+      }
+
+      section {
+        margin: 48px 0;
+        scroll-margin-top: 64px;
+      }
+      h2 {
+        font-family: var(--pixel);
+        font-weight: 600;
+        font-size: 30px;
+        margin: 0 0 8px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      h2 .em {
+        font-size: 26px;
+      }
+      .section-lede {
+        color: var(--ink-dim);
+        max-width: 760px;
+        margin: 0 0 22px;
+      }
+
+      /* ---------- two orgs ---------- */
+      .orgs {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 18px;
+      }
+      @media (max-width: 720px) {
+        .orgs {
+          grid-template-columns: 1fr;
+        }
+      }
+      .org {
+        border: 2px solid var(--line);
+        border-radius: var(--radius);
+        padding: 18px 20px;
+        background: var(--panel);
+        box-shadow: var(--shadow);
+      }
+      .org.core {
+        border-top: 6px solid var(--core);
+      }
+      .org.rebble {
+        border-top: 6px solid var(--rebble);
+      }
+      .org h3 {
+        margin: 2px 0 4px;
+        font-family: var(--pixel);
+        font-weight: 600;
+        font-size: 22px;
+      }
+      .org .tag {
+        font-family: var(--label);
+        font-size: 10px;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+      }
+      .org.core .tag {
+        color: var(--core);
+      }
+      .org.rebble .tag {
+        color: var(--rebble);
+      }
+      .org p {
+        color: var(--ink-dim);
+        font-size: 14px;
+        margin: 10px 0 0;
+      }
+      .org ul {
+        margin: 10px 0 0;
+        padding-left: 18px;
+        color: var(--ink-dim);
+        font-size: 14px;
+      }
+      .org li {
+        margin: 4px 0;
+      }
+      .org code {
+        font-family: var(--mono);
+        font-size: 12px;
+        color: var(--ink);
+        background: var(--panel-2);
+        border: 1px solid var(--hair);
+        padding: 1px 5px;
+        border-radius: 5px;
+      }
+      .friction {
+        margin-top: 18px;
+        border: 2px dashed var(--line);
+        border-radius: var(--radius);
+        padding: 12px 16px;
+        font-size: 13.5px;
+        color: var(--ink-dim);
+        background: var(--panel);
+      }
+      .friction b {
+        color: var(--ink);
+      }
+
+      /* ---------- timeline ---------- */
+      .timeline {
+        display: flex;
+        gap: 0;
+        flex-wrap: wrap;
+        counter-reset: step;
+      }
+      .tstep {
+        flex: 1 1 180px;
+        position: relative;
+        padding: 18px 16px 16px;
+        border-top: 3px solid var(--line);
+        margin-top: 8px;
+      }
+      .tstep::before {
+        content: "";
+        position: absolute;
+        top: -9px;
+        left: 0;
+        width: 14px;
+        height: 14px;
+        border-radius: 3px;
+        background: var(--core);
+        border: 2px solid var(--line);
+      }
+      .tstep .yr {
+        font-family: var(--label);
+        font-size: 12px;
+        color: var(--core);
+      }
+      .tstep h4 {
+        margin: 8px 0 4px;
+        font-family: var(--pixel);
+        font-weight: 600;
+        font-size: 17px;
+      }
+      .tstep p {
+        margin: 0;
+        font-size: 13px;
+        color: var(--ink-dim);
+      }
+
+      /* ---------- legend / controls ---------- */
+      .controls {
+        display: flex;
+        gap: 18px;
+        flex-wrap: wrap;
+        align-items: center;
+        background: var(--panel);
+        border: 2px solid var(--line);
+        border-radius: var(--radius);
+        padding: 12px 16px;
+        margin-bottom: 18px;
+        box-shadow: var(--shadow);
+      }
+      .legend {
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
+        font-size: 12.5px;
+        color: var(--ink-dim);
+      }
+      .legend span {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+      }
+      .dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 3px;
+        border: 1.5px solid var(--line);
+        display: inline-block;
+      }
+      .dot.core {
+        background: var(--core);
+      }
+      .dot.rebble {
+        background: var(--rebble);
+      }
+      .dot.legacy {
+        background: var(--legacy);
+      }
+      .dot.future {
+        background: var(--future);
+      }
+      .toggle {
+        margin-left: auto;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--ink-dim);
+        cursor: pointer;
+        user-select: none;
+      }
+      .toggle input {
+        accent-color: var(--core);
+        width: 16px;
+        height: 16px;
+      }
+
+      /* ---------- stack diagram ---------- */
+      .stage {
+        position: relative;
+      }
+      .bands {
+        position: relative;
+        z-index: 2;
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+      }
+      .band {
+        border: 2px solid var(--line);
+        border-radius: 14px;
+        padding: 14px 16px 16px;
+        background: var(--panel);
+        box-shadow: var(--shadow);
+      }
+
+      /* inter-band connector: the real data path, drawn cleanly between layers */
+      .bandlink {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        position: relative;
+        padding: 14px 0;
+        margin: 0 auto;
+      }
+      .bandlink::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 50%;
+        width: 3px;
+        background: var(--line);
+        z-index: 0;
+      }
+      .bandlink .bl-pill {
+        position: relative;
+        z-index: 1;
+        display: inline-flex;
+        align-items: center;
+        gap: 9px;
+        background: var(--ink);
+        border: 2px solid var(--line);
+        border-radius: 99px;
+        padding: 6px 14px;
+        font-size: 12.5px;
+        color: #fff;
+      }
+      .bandlink .bl-pill .ar {
+        color: #fff;
+        font-size: 14px;
+        line-height: 1;
+      }
+      .bandlink .bl-pill code {
+        font-family: var(--mono);
+        font-size: 11.5px;
+        color: var(--watch);
+        background: transparent;
+      }
+      .bandlink .bl-note {
+        color: var(--ink-dim);
+        font-size: 11.5px;
+      }
+      .band-head {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 12px;
+      }
+      .band-head .em {
+        font-size: 20px;
+      }
+      .band-head h3 {
+        margin: 0;
+        font-family: var(--pixel);
+        font-weight: 600;
+        font-size: 18px;
+        letter-spacing: 0;
+      }
+      .band-head .hint {
+        font-size: 12px;
+        color: var(--ink-dim);
+      }
+      .band.cloud {
+        border-left: 6px solid var(--cloud);
+      }
+      .band.phone {
+        border-left: 6px solid var(--phone);
+      }
+      .band.watch {
+        border-left: 6px solid var(--watch);
+      }
+      .row {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      .group {
+        border: 2px dashed var(--line);
+        border-radius: 12px;
+        padding: 10px 12px 12px;
+        flex: 1 1 280px;
+        background: var(--panel-2);
+      }
+      .group > .glabel {
+        font-size: 10px;
+        font-family: var(--label);
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--ink-dim);
+        margin-bottom: 9px;
+        display: block;
+      }
+      .group .row {
+        gap: 10px;
+      }
+
+      .node {
+        position: relative;
+        cursor: pointer;
+        border: 2px solid var(--line);
+        border-radius: 10px;
+        padding: 10px 12px;
+        background: var(--panel);
+        min-width: 130px;
+        flex: 1 1 130px;
+        box-shadow: 2px 2px 0 var(--ink);
+        transition:
+          transform 0.1s ease,
+          box-shadow 0.1s ease,
+          opacity 0.2s ease;
+      }
+      .node:hover {
+        transform: translate(-2px, -2px);
+        box-shadow: var(--shadow);
+      }
+      .node .nname {
+        font-weight: 700;
+        font-size: 14px;
+        display: flex;
+        align-items: center;
+        gap: 7px;
+      }
+      .node .npurpose {
+        font-size: 11.5px;
+        color: var(--ink-dim);
+        margin-top: 3px;
+        line-height: 1.35;
+      }
+      .node .badge {
+        position: absolute;
+        top: -9px;
+        right: 10px;
+        font-size: 9px;
+        font-family: var(--label);
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+        padding: 2px 6px;
+        border-radius: 6px;
+        background: var(--ink);
+        color: #fff;
+        border: 2px solid var(--line);
+      }
+      .node[data-status="core"] {
+        border-left: 6px solid var(--core);
+      }
+      .node[data-status="rebble"] {
+        border-left: 6px solid var(--rebble);
+      }
+      .node[data-status="legacy"] {
+        border-left: 6px solid var(--legacy);
+        border-style: dashed;
+      }
+      .node[data-status="future"] {
+        border-left: 6px solid var(--future);
+      }
+      .node[data-status="core"] .badge {
+        background: var(--core);
+        color: var(--ink);
+      }
+      .node[data-status="rebble"] .badge {
+        background: var(--rebble);
+        color: #fff;
+      }
+      .node[data-status="legacy"] .badge {
+        background: var(--legacy);
+        color: var(--ink);
+      }
+      .node[data-status="future"] .badge {
+        background: var(--future);
+        color: var(--ink);
+      }
+      .node.active {
+        border-color: var(--ink);
+        transform: translate(-2px, -2px);
+        box-shadow: var(--shadow-lg);
+        outline: 3px solid var(--core);
+      }
+      body.hide-legacy .node[data-status="legacy"] {
+        opacity: 0.32;
+        filter: saturate(0.2);
+      }
+
+      .firmware-strip {
+        margin-top: 10px;
+        border: 2px solid var(--line);
+        border-radius: 10px;
+        padding: 10px 13px;
+        background: var(--watch);
+        box-shadow: 2px 2px 0 var(--ink);
+        cursor: pointer;
+        transition:
+          transform 0.1s,
+          box-shadow 0.1s;
+      }
+      .firmware-strip:hover {
+        transform: translate(-2px, -2px);
+        box-shadow: var(--shadow);
+      }
+      .firmware-strip .nname {
+        color: var(--ink);
+      }
+      .firmware-strip .npurpose {
+        color: #0b3b36;
+      }
+      .firmware-strip .badge {
+        background: var(--ink) !important;
+        color: #fff !important;
+      }
+
+      /* ---------- detail panel ---------- */
+      .detail {
+        position: sticky;
+        bottom: 16px;
+        margin-top: 18px;
+        z-index: 30;
+        border: 2px solid var(--line);
+        border-radius: 14px;
+        background: var(--panel);
+        padding: 16px 18px;
+        box-shadow: var(--shadow-lg);
+        min-height: 96px;
+      }
+      .detail .dempty {
+        color: var(--ink-dim);
+        font-size: 14px;
+      }
+      .detail h4 {
+        margin: 0;
+        font-family: var(--pixel);
+        font-weight: 600;
+        font-size: 20px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+      .detail .pill {
+        font-family: var(--label);
+        font-size: 9px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        padding: 3px 8px;
+        border-radius: 6px;
+        border: 2px solid var(--line);
+      }
+      .detail .meta {
+        display: flex;
+        gap: 14px;
+        flex-wrap: wrap;
+        margin: 10px 0;
+        font-size: 12.5px;
+        color: var(--ink-dim);
+      }
+      .detail .meta b {
+        color: var(--ink);
+        font-weight: 700;
+      }
+      .detail p.dbody {
+        margin: 8px 0 6px;
+        font-size: 14.5px;
+        color: var(--ink);
+        max-width: 860px;
+      }
+      .detail .links a {
+        font-family: var(--mono);
+        font-size: 12px;
+        margin-right: 14px;
+      }
+      .detail code {
+        font-family: var(--mono);
+        font-size: 12.5px;
+        background: var(--panel-2);
+        border: 1px solid var(--hair);
+        padding: 1px 6px;
+        border-radius: 5px;
+      }
+
+      /* ---------- model matrix ---------- */
+      table.matrix {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13.5px;
+        background: var(--panel);
+        border: 2px solid var(--line);
+        border-radius: var(--radius);
+        overflow: hidden;
+        box-shadow: var(--shadow);
+      }
+      table.matrix th,
+      table.matrix td {
+        text-align: left;
+        padding: 10px 12px;
+        border-bottom: 1px solid var(--hair);
+        vertical-align: top;
+      }
+      table.matrix th {
+        color: var(--ink);
+        background: var(--panel-2);
+        font-family: var(--label);
+        font-weight: 400;
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        border-bottom: 2px solid var(--line);
+      }
+      table.matrix tr {
+        cursor: pointer;
+      }
+      table.matrix tbody tr:hover {
+        background: var(--core-soft);
+      }
+      table.matrix .mn {
+        font-weight: 700;
+        color: var(--ink);
+      }
+      table.matrix .where {
+        font-family: var(--mono);
+        font-size: 12px;
+      }
+      .statuschip {
+        font-family: var(--label);
+        font-size: 9px;
+        text-transform: uppercase;
+        padding: 3px 7px;
+        border-radius: 6px;
+        border: 1.5px solid var(--line);
+        white-space: nowrap;
+      }
+      .statuschip.core {
+        color: var(--ink);
+        background: var(--core);
+      }
+      .statuschip.rebble {
+        color: #fff;
+        background: var(--rebble);
+      }
+      .statuschip.legacy {
+        color: var(--ink);
+        background: var(--legacy);
+      }
+      .statuschip.future {
+        color: var(--ink);
+        background: var(--future);
+      }
+
+      /* ---------- toolchain flow ---------- */
+      .flow {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 0;
+      }
+      @media (max-width: 820px) {
+        .flow {
+          grid-template-columns: 1fr 1fr;
+        }
+      }
+      .fstep {
+        position: relative;
+        border: 2px solid var(--line);
+        border-radius: 12px;
+        padding: 14px;
+        margin: 0 8px;
+        background: var(--panel);
+        box-shadow: var(--shadow);
+      }
+      .fstep h4 {
+        margin: 0 0 8px;
+        font-family: var(--pixel);
+        font-weight: 600;
+        font-size: 16px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .fstep .fnum {
+        font-family: var(--label);
+        color: var(--ink);
+        background: var(--core);
+        border: 2px solid var(--line);
+        border-radius: 6px;
+        padding: 1px 7px;
+        font-size: 12px;
+      }
+      .fstep ul {
+        margin: 0;
+        padding-left: 16px;
+      }
+      .fstep li {
+        font-size: 12.5px;
+        color: var(--ink-dim);
+        margin: 6px 0;
+        cursor: pointer;
+      }
+      .fstep li:hover {
+        color: var(--ink);
+      }
+      .fstep li .nm {
+        color: var(--ink);
+        font-weight: 700;
+      }
+
+      /* ---------- hardware ---------- */
+      .hw {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+        gap: 14px;
+      }
+      .plat {
+        border: 2px solid var(--line);
+        border-radius: 12px;
+        padding: 13px 14px;
+        background: var(--panel);
+        box-shadow: var(--shadow);
+      }
+      .plat .code {
+        font-family: var(--pixel);
+        font-weight: 600;
+        font-size: 19px;
+      }
+      .plat.cur .code {
+        color: var(--core);
+      }
+      .plat.leg .code {
+        color: var(--ink);
+      }
+      .plat.fut .code {
+        color: var(--ink);
+      }
+      .plat .models {
+        font-size: 13px;
+        margin-top: 4px;
+      }
+      .plat .spec {
+        font-size: 11.5px;
+        color: var(--ink-dim);
+        margin-top: 6px;
+        font-family: var(--mono);
+      }
+      .plat .st {
+        font-size: 9px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        font-family: var(--label);
+        margin-top: 10px;
+        padding: 2px 7px;
+        border: 1.5px solid var(--line);
+        border-radius: 6px;
+        display: inline-block;
+      }
+      .plat.cur .st {
+        color: var(--ink);
+        background: var(--core);
+      }
+      .plat.leg .st {
+        color: var(--ink);
+        background: var(--legacy);
+      }
+      .plat.fut .st {
+        color: var(--ink);
+        background: var(--future);
+      }
+
+      .note {
+        font-size: 12.5px;
+        color: var(--ink-dim);
+        border-left: 4px solid var(--core);
+        padding-left: 12px;
+        margin-top: 16px;
+      }
+      footer {
+        color: var(--ink-dim);
+        font-size: 12.5px;
+        border-top: 2px solid var(--line);
+        padding-top: 18px;
+        margin-top: 56px;
+      }
+      footer code {
+        font-family: var(--mono);
+      }
+    </style>
+  </head>
+  <body>
+    <header class="hero">
+      <p class="kicker">Field guide · 2026</p>
+      <h1>
+        The Pebble stack, untangled
+        <span class="sub">Where every SDK, library, CLI and cloud service actually lives.</span>
+      </h1>
+      <p class="lede">
+        Pebble's toolchain spans <b>three eras</b> and <b>four execution layers</b> — the watch, its
+        JS engine, the companion phone app, and the cloud — so the same name can be "dead since 2016"
+        and "recommended today" at once. This sorts each piece by <b>where it runs</b> and
+        <b>whether it's current, community-run, or legacy</b>. Click anything for details.
+      </p>
+    </header>
+
+    <nav class="toc">
+      <div class="inner">
+        <a href="#orgs">Two organisations</a>
+        <a href="#eras">Timeline</a>
+        <a href="#stack">The runtime stack</a>
+        <a href="#models">Programming models</a>
+        <a href="#toolchain">Toolchain</a>
+        <a href="#hardware">Hardware &amp; platforms</a>
+      </div>
+    </nav>
+
+    <div class="wrap">
+      <!-- ============ TWO ORGS ============ -->
+      <section id="orgs">
+        <h2><span class="em">🏢</span> Two organisations</h2>
+        <p class="section-lede">
+          Most "which Pebble is this?" confusion comes from mixing these up. They're separate — which
+          is why some services are official and some are volunteer-run.
+        </p>
+        <div class="orgs">
+          <div class="org core">
+            <span class="tag">Official · commercial</span>
+            <h3>Core Devices</h3>
+            <p>
+              Eric Migicovsky's company, which relaunched Pebble in 2025. Makes the new watches,
+              maintains the firmware, and ships the modern SDK.
+            </p>
+            <ul>
+              <li>Sells new hardware (Pebble 2 Duo, Pebble Time 2)</li>
+              <li>
+                Owns <code>repebble.com</code>, <code>github.com/coredevices</code>, the Pebble
+                trademark
+              </li>
+              <li>
+                Maintains <b>PebbleOS</b>, <code>pebble-tool</code>, CloudPebble, and the
+                <b>Alloy</b> JS SDK
+              </li>
+            </ul>
+          </div>
+          <div class="org rebble">
+            <span class="tag">Community · non-profit</span>
+            <h3>Rebble</h3>
+            <p>
+              The volunteer foundation that kept Pebble alive after Fitbit shut the servers in 2018,
+              by reverse-engineering and re-hosting the cloud services.
+            </p>
+            <ul>
+              <li>
+                Runs the <b>app store</b> (~13k legacy apps), <b>weather</b>,
+                <b>voice dictation</b>, timeline sync
+              </li>
+              <li>Owns <code>rebble.io</code>, <code>github.com/pebble-dev</code></li>
+              <li>Funded by a <b>$3/mo</b> Web Services subscription</li>
+            </ul>
+          </div>
+        </div>
+        <div class="friction">
+          <b>Their relationship is unsettled.</b> A deal to share Rebble's app-store backend turned
+          into a public falling-out over data ownership. Expect overlap and duplicated services, not
+          one tidy stack — treat the specifics here as a snapshot.
+        </div>
+      </section>
+
+      <!-- ============ ERAS ============ -->
+      <section id="eras">
+        <h2><span class="em">🕰️</span> Three eras</h2>
+        <p class="section-lede">
+          The same APIs were written in 2014, abandoned in 2016, kept alive by volunteers, then
+          officially revived — so "old Pebble docs" are often still the canonical reference.
+        </p>
+        <div class="timeline">
+          <div class="tstep">
+            <div class="yr">2012–2016</div>
+            <h4>Pebble Inc.</h4>
+            <p>
+              Original company. Built the C SDK, PebbleKit, CloudPebble, the app store, the
+              timeline, Rocky.js. Bought by Fitbit; wound down.
+            </p>
+          </div>
+          <div class="tstep">
+            <div class="yr">2018→</div>
+            <h4>Rebble keep-alive</h4>
+            <p>
+              Fitbit kills the servers (Jun 2018). Rebble re-hosts app store, weather, dictation and
+              timeline so existing watches keep working.
+            </p>
+          </div>
+          <div class="tstep">
+            <div class="yr">Jan 2025</div>
+            <h4>Open source</h4>
+            <p>
+              Google open-sources PebbleOS under Apache-2.0 (<code>github.com/google/pebble</code>) —
+              minus a few proprietary blobs.
+            </p>
+          </div>
+          <div class="tstep">
+            <div class="yr">2025–2026</div>
+            <h4>Core Devices revival</h4>
+            <p>
+              Eric M. relaunches Pebble: new watches, a maintained PebbleOS fork, CloudPebble, and
+              the new <b>Alloy</b> JS/TypeScript SDK.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ THE STACK ============ -->
+      <section id="stack">
+        <h2><span class="em">🧱</span> The runtime stack</h2>
+        <p class="section-lede">
+          The key idea: <b>the watch can't reach the internet.</b> The phone proxies for it; the
+          cloud serves config and timeline data. Boxes are grouped by the layer they run on — click
+          any one to fill the panel at the bottom.
+        </p>
+
+        <div class="controls">
+          <div class="legend">
+            <span><i class="dot core"></i> Core Devices · current</span>
+            <span><i class="dot rebble"></i> Rebble · community</span>
+            <span><i class="dot legacy"></i> Legacy</span>
+            <span><i class="dot future"></i> New / in flux</span>
+          </div>
+          <label class="toggle"
+            ><input type="checkbox" id="hideLegacy" /> Dim legacy</label
+          >
+        </div>
+
+        <div class="stage">
+          <div class="bands">
+            <!-- CLOUD -->
+            <div class="band cloud">
+              <div class="band-head">
+                <span class="em">☁️</span>
+                <h3>Internet &amp; cloud services</h3>
+                <span class="hint"
+                  >— mostly Rebble-hosted; the only layer that talks to the open web</span
+                >
+              </div>
+              <div class="row">
+                <div class="node" data-id="web" data-status="core">
+                  <span class="badge">web</span>
+                  <div class="nname">🌐 The open web</div>
+                  <div class="npurpose">
+                    Any HTTP API your app wants — weather, transit, sports…
+                  </div>
+                </div>
+                <div class="node" data-id="rws" data-status="rebble">
+                  <span class="badge">rebble</span>
+                  <div class="nname">Rebble Web Services</div>
+                  <div class="npurpose">Weather, voice dictation, timeline sync. $3/mo.</div>
+                </div>
+                <div class="node" data-id="timeline" data-status="rebble">
+                  <span class="badge">rebble</span>
+                  <div class="nname">Timeline API</div>
+                  <div class="npurpose">Push "pins" (events) to a user's watch timeline.</div>
+                </div>
+                <div class="node" data-id="appstore" data-status="rebble">
+                  <span class="badge">store</span>
+                  <div class="nname">App store</div>
+                  <div class="npurpose">
+                    Where <code>.pbw</code> apps & faces are published / installed.
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="bandlink">
+              <span class="bl-pill"
+                ><span class="ar">↑↓</span> <code>HTTP / XMLHttpRequest</code> &middot; timeline
+                pins</span
+              >
+              <span class="bl-note">the phone is the watch's only route to the internet</span>
+            </div>
+
+            <!-- PHONE -->
+            <div class="band phone">
+              <div class="band-head">
+                <span class="em">📱</span>
+                <h3>Phone — the companion app</h3>
+                <span class="hint">— bridges the watch to the internet over Bluetooth</span>
+              </div>
+              <div class="row">
+                <div class="group">
+                  <span class="glabel"
+                    >Inside the official Pebble app (no install of your own)</span
+                  >
+                  <div class="row">
+                    <div class="node" data-id="pkjs" data-status="core">
+                      <span class="badge">phone JS</span>
+                      <div class="nname">PebbleKit JS</div>
+                      <div class="npurpose">Your app's JS sandbox: HTTP, GPS, storage, config.</div>
+                    </div>
+                    <div class="node" data-id="clay" data-status="rebble">
+                      <span class="badge">phone JS</span>
+                      <div class="nname">Clay</div>
+                      <div class="npurpose">Build settings screens from JSON — no server.</div>
+                    </div>
+                    <div class="node" data-id="configpage" data-status="core">
+                      <span class="badge">webview</span>
+                      <div class="nname">Config page</div>
+                      <div class="npurpose">HTML settings UI opened by PebbleKit JS.</div>
+                    </div>
+                  </div>
+                </div>
+                <div class="group">
+                  <span class="glabel">Your own standalone phone app</span>
+                  <div class="row">
+                    <div class="node" data-id="pkmobile" data-status="legacy">
+                      <span class="badge">native</span>
+                      <div class="nname">PebbleKit iOS / Android</div>
+                      <div class="npurpose">Native libs so your own app talks to the watch.</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="bandlink">
+              <span class="bl-pill"
+                ><span class="ar">↑↓</span> <code>AppMessage</code> &middot; key/value,
+                ACK/NACK</span
+              >
+              <span class="bl-note"
+                >Alloy &amp; Rocky.js wrap this as a simpler
+                <code style="color: var(--ink-dim)">postMessage</code></span
+              >
+            </div>
+
+            <!-- WATCH -->
+            <div class="band watch">
+              <div class="band-head">
+                <span class="em">⌚</span>
+                <h3>Watch</h3>
+                <span class="hint">— your app + the OS, on the watch's own chip</span>
+              </div>
+              <div class="row">
+                <div class="group">
+                  <span class="glabel">Pick ONE way to write your app</span>
+                  <div class="row">
+                    <div class="node" data-id="csdk" data-status="core">
+                      <span class="badge">watch C</span>
+                      <div class="nname">C SDK</div>
+                      <div class="npurpose">
+                        The native path. Windows, Layers, GContext, services.
+                      </div>
+                    </div>
+                    <div class="node" data-id="alloy" data-status="core">
+                      <span class="badge">watch JS</span>
+                      <div class="nname">Alloy</div>
+                      <div class="npurpose">Modern JS/TS, runs natively via Moddable XS.</div>
+                    </div>
+                    <div class="node" data-id="rocky" data-status="legacy">
+                      <span class="badge">watch JS</span>
+                      <div class="nname">Rocky.js</div>
+                      <div class="npurpose">
+                        Older on-watch JS. Faces only. Superseded by Alloy.
+                      </div>
+                    </div>
+                    <div class="node" data-id="pebblejs" data-status="legacy">
+                      <span class="badge">phone JS</span>
+                      <div class="nname">pebble.js</div>
+                      <div class="npurpose">Old JS UI mirrored to the watch. Abandoned.</div>
+                    </div>
+                  </div>
+                </div>
+                <div class="group">
+                  <span class="glabel">Shared primitives (any native app uses these)</span>
+                  <div class="row">
+                    <div class="node" data-id="appmessage" data-status="core">
+                      <span class="badge">comms</span>
+                      <div class="nname">AppMessage</div>
+                      <div class="npurpose">Key/value messages to & from the phone.</div>
+                    </div>
+                    <div class="node" data-id="worker" data-status="core">
+                      <span class="badge">bg</span>
+                      <div class="nname">Background Worker</div>
+                      <div class="npurpose">Tiny binary that keeps running (e.g. step count).</div>
+                    </div>
+                    <div class="node" data-id="datalog" data-status="core">
+                      <span class="badge">comms</span>
+                      <div class="nname">Data Logging</div>
+                      <div class="npurpose">Buffer data on-watch, batch-spool to phone.</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div
+                class="firmware-strip node"
+                data-id="pebbleos"
+                data-status="core"
+                style="flex: 1 1 100%"
+              >
+                <span class="badge">firmware</span>
+                <div class="nname">⚙️ PebbleOS — the open-source firmware everything sits on</div>
+                <div class="npurpose">
+                  FreeRTOS + NimBLE Bluetooth + JerryScript. Now Apache-2.0; maintained by Core
+                  Devices.
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- /bands -->
+        </div>
+        <!-- /stage -->
+
+        <div class="detail" id="detail">
+          <div class="dempty">
+            👆 Click any box above (or a row in the next table) to read what it is, which layer it
+            runs on, and whether it's current or legacy.
+          </div>
+        </div>
+
+        <p class="note">
+          The labels between bands are the real data path: watch app ⇄ <b>AppMessage</b> ⇄ PebbleKit
+          JS ⇄ <b>HTTP</b> ⇄ the internet. Alloy and Rocky.js swap the C app for on-watch JavaScript
+          but keep the same phone bridge for the network.
+        </p>
+      </section>
+
+      <!-- ============ MODELS ============ -->
+      <section id="models">
+        <h2><span class="em">🧩</span> Programming models, side by side</h2>
+        <p class="section-lede">
+          "C or JavaScript?" depends on which layer you want your code to live on. Click a row to
+          expand it in the panel above.
+        </p>
+        <table class="matrix" id="matrix">
+          <thead>
+            <tr>
+              <th>Model</th>
+              <th>Runs on</th>
+              <th>Language</th>
+              <th>Use it for</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr data-id="csdk">
+              <td class="mn">C SDK</td>
+              <td class="where">watch (native)</td>
+              <td>C</td>
+              <td>Anything; full control, best performance</td>
+              <td><span class="statuschip core">current</span></td>
+            </tr>
+            <tr data-id="alloy">
+              <td class="mn">Alloy</td>
+              <td class="where">watch (JS engine)</td>
+              <td>JS / TypeScript</td>
+              <td>Modern faces & apps without C</td>
+              <td><span class="statuschip core">current</span></td>
+            </tr>
+            <tr data-id="pkjs">
+              <td class="mn">PebbleKit JS</td>
+              <td class="where">phone (companion app)</td>
+              <td>JavaScript</td>
+              <td>Internet, GPS, config, timeline glue</td>
+              <td><span class="statuschip core">current</span></td>
+            </tr>
+            <tr data-id="pkmobile">
+              <td class="mn">PebbleKit iOS / Android</td>
+              <td class="where">phone (your native app)</td>
+              <td>Obj-C / Java</td>
+              <td>Letting your own phone app drive the watch</td>
+              <td><span class="statuschip legacy">revived legacy</span></td>
+            </tr>
+            <tr data-id="rocky">
+              <td class="mn">Rocky.js</td>
+              <td class="where">watch (JS engine)</td>
+              <td>JavaScript</td>
+              <td>(historical) on-watch JS faces</td>
+              <td><span class="statuschip legacy">superseded</span></td>
+            </tr>
+            <tr data-id="pebblejs">
+              <td class="mn">pebble.js</td>
+              <td class="where">phone, mirrored to watch</td>
+              <td>JavaScript</td>
+              <td>(historical) whole apps in JS</td>
+              <td><span class="statuschip legacy">abandoned</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <!-- ============ TOOLCHAIN ============ -->
+      <section id="toolchain">
+        <h2><span class="em">🛠️</span> The toolchain: write → build → run → publish</h2>
+        <p class="section-lede">
+          The <b>tools</b> you operate, separate from the libraries above. Work fully in the browser
+          (CloudPebble) or locally (the <code>pebble</code> CLI). Click an item to learn more.
+        </p>
+        <div class="flow">
+          <div class="fstep">
+            <h4><span class="fnum">1</span> ✍️ Write</h4>
+            <ul>
+              <li data-id="cloudpebble">
+                <span class="nm">CloudPebble</span> — browser IDE, zero install
+              </li>
+              <li data-id="pebbletool">
+                <span class="nm">pebble CLI</span> — local <code>pebble new-project</code>
+              </li>
+              <li data-id="vscode"><span class="nm">VS Code ext</span> — local IDE integration</li>
+            </ul>
+          </div>
+          <div class="fstep">
+            <h4><span class="fnum">2</span> 🔨 Build</h4>
+            <ul>
+              <li data-id="waf"><span class="nm">Waf</span> — the build system</li>
+              <li data-id="pebbletool">
+                <span class="nm">pebble build</span> → a <code>.pbw</code> bundle
+              </li>
+              <li><span class="nm">SDK</span> — per-platform compilers</li>
+            </ul>
+          </div>
+          <div class="fstep">
+            <h4><span class="fnum">3</span> ▶️ Run</h4>
+            <ul>
+              <li data-id="qemu">
+                <span class="nm">QEMU emulator</span> — fake watch on your machine
+              </li>
+              <li data-id="pkjsdev">
+                <span class="nm">pypkjs</span> — runs the phone-JS half in the emulator
+              </li>
+              <li data-id="pebbletool">
+                <span class="nm">pebble install</span> — to emulator or real watch
+              </li>
+            </ul>
+          </div>
+          <div class="fstep">
+            <h4><span class="fnum">4</span> 🚀 Publish</h4>
+            <ul>
+              <li data-id="appstore">
+                <span class="nm">App store</span> — upload the <code>.pbw</code>
+              </li>
+              <li><span class="nm">Users install</span> via the phone app</li>
+            </ul>
+          </div>
+        </div>
+        <p class="note">
+          Two front-ends, one output: <b>CloudPebble</b> hides steps 1–3 behind a website; the
+          <b>pebble CLI</b> exposes them locally. Both emit the same <code>.pbw</code>.
+        </p>
+      </section>
+
+      <!-- ============ HARDWARE ============ -->
+      <section id="hardware">
+        <h2><span class="em">⌚</span> Hardware &amp; platforms</h2>
+        <p class="section-lede">
+          You don't target watch <i>names</i> — you target <b>platform codenames</b> (rock types),
+          each a screen shape, size and colour depth. Build once, the SDK compiles for every platform
+          you list.
+        </p>
+        <div class="hw">
+          <div class="plat leg">
+            <div class="code">aplite</div>
+            <div class="models">Pebble Classic / Steel</div>
+            <div class="spec">144×168 · B&amp;W · rect</div>
+            <div class="st">legacy</div>
+          </div>
+          <div class="plat leg">
+            <div class="code">basalt</div>
+            <div class="models">Pebble Time / Time Steel</div>
+            <div class="spec">144×168 · 64-colour · rect</div>
+            <div class="st">legacy</div>
+          </div>
+          <div class="plat leg">
+            <div class="code">chalk</div>
+            <div class="models">Pebble Time Round</div>
+            <div class="spec">180×180 · 64-colour · round</div>
+            <div class="st">legacy</div>
+          </div>
+          <div class="plat leg">
+            <div class="code">diorite</div>
+            <div class="models">Pebble 2 / 2 SE</div>
+            <div class="spec">144×168 · B&amp;W · rect</div>
+            <div class="st">legacy</div>
+          </div>
+          <div class="plat cur">
+            <div class="code">emery</div>
+            <div class="models">Pebble Time 2 <span style="color: var(--ink-dim)">(new)</span></div>
+            <div class="spec">200×228 · 64-colour · rect</div>
+            <div class="st">current</div>
+          </div>
+          <div class="plat fut">
+            <div class="code">gabbro</div>
+            <div class="models">new round Pebble</div>
+            <div class="spec">round · color · specs TBD</div>
+            <div class="st">in flux</div>
+          </div>
+        </div>
+        <p class="note">
+          Names like <code>flint</code> / <code>gabbro</code> for the newest watches are still
+          settling — verify against
+          <a href="https://developer.repebble.com/docs/" target="_blank" rel="noopener"
+            >developer.repebble.com</a
+          >. The new watches run open-source PebbleOS and stay compatible with thousands of legacy
+          apps.
+        </p>
+      </section>
+
+      <footer>
+        <p>
+          <b>Sources.</b> Built from
+          <a href="https://developer.repebble.com/docs/" target="_blank" rel="noopener"
+            >developer.repebble.com</a
+          >, the
+          <a href="https://developer.repebble.com/open-source/" target="_blank" rel="noopener"
+            >open-source page</a
+          >,
+          <a href="https://github.com/coredevices" target="_blank" rel="noopener"
+            >github.com/coredevices</a
+          >, the mirrored docs at
+          <a href="https://developer.rebble.io" target="_blank" rel="noopener"
+            >developer.rebble.io</a
+          >, and Eric Migicovsky's blog. A fast-moving ecosystem in 2026 — ship dates, the newest
+          codenames, and the exact Core ↔ Rebble split are unsettled, so double-check anything
+          load-bearing.
+        </p>
+      </footer>
+    </div>
+    <!-- /wrap -->
+
+    <script>
+      // ---------- data: one entry per clickable node ----------
+      const DATA = {
+        // cloud
+        web: {
+          name: "🌐 The open web",
+          layer: "Internet",
+          status: "core",
+          lang: "—",
+          purpose: "Any third-party HTTP/HTTPS API your app wants to use.",
+          body: "The watch never touches this directly. Your phone-side JavaScript (PebbleKit JS) makes the request with <code>XMLHttpRequest</code> and relays the result to the watch over AppMessage.",
+          links: [],
+        },
+        rws: {
+          name: "Rebble Web Services",
+          layer: "Cloud",
+          status: "rebble",
+          lang: "—",
+          purpose: "The community-run backend that replaced Pebble Inc.'s dead servers.",
+          body: "A $3/month (or $33/year) subscription funds Rebble's infrastructure and unlocks <b>weather</b>, <b>voice dictation</b>, faster <b>timeline</b> sync, and the Bobby assistant. The free tier still gives you an account, app-store access and basic timeline.",
+          links: [["rebble.io", "https://rebble.io"]],
+        },
+        timeline: {
+          name: "Timeline API",
+          layer: "Cloud → watch firmware",
+          status: "rebble",
+          lang: "HTTP/JSON",
+          purpose: 'Push time-anchored "pins" (events) onto a user\'s watch timeline.',
+          body: "From a watchface, Up = past, Down = future. Pins (weather, calendar, sports, reminders) are pushed via a REST API — either from your phone-side PebbleKit JS or from your own backend server. Rebble re-hosts the endpoint at <code>timeline-api.rebble.io</code>; delivery is batched (minutes), not real-time.",
+          links: [["Timeline guide", "https://developer.repebble.com/docs/"]],
+        },
+        appstore: {
+          name: "App store",
+          layer: "Cloud",
+          status: "rebble",
+          lang: "—",
+          purpose: "Where finished apps & watchfaces are published and installed from.",
+          body: "Rebble hosts the legacy store of ~13,000 apps (2012–2016) plus new submissions; Core Devices is also standing up its own store. You publish a <code>.pbw</code> bundle; users browse and install through the phone app.",
+          links: [["Rebble store", "https://apps.rebble.io"]],
+        },
+
+        // phone
+        pkjs: {
+          name: "PebbleKit JS",
+          layer: "Phone (companion app)",
+          status: "core",
+          lang: "JavaScript",
+          purpose:
+            "JavaScript bundled with your app that runs inside the official phone app — the watch's gateway to the internet.",
+          body: "The single most-used connected-app library. Gives you <code>XMLHttpRequest</code> (HTTP), <code>navigator.geolocation</code> (GPS), <code>localStorage</code>, and config-page hooks. It is a JS sandbox, <b>not a browser</b> — no visible UI. Talks to your watch app via <b>AppMessage</b>. Lives at <code>src/pkjs/index.js</code>.",
+          links: [["PebbleKit JS docs", "https://developer.repebble.com/docs/"]],
+        },
+        clay: {
+          name: "Clay",
+          layer: "Phone (config webview)",
+          status: "rebble",
+          lang: "JS + JSON",
+          purpose:
+            "Generate an app's settings screen from a JSON description — no server, no hand-written HTML.",
+          body: "You declare components (toggles, sliders, colour pickers) in <code>config.json</code>; Clay builds the styled page locally, persists choices, and auto-sends them to the watch over AppMessage using your <code>messageKeys</code>. The recommended way to do settings. Maintained by the pebble-dev community (npm: <code>pebble-clay</code>).",
+          links: [["clay on GitHub", "https://github.com/pebble-dev/clay"]],
+        },
+        configpage: {
+          name: "Config (settings) page",
+          layer: "Phone (webview) + your server / data-URI",
+          status: "core",
+          lang: "HTML/JS",
+          purpose: "The HTML page a user sees when they tap your app's ⚙️ settings.",
+          body: "Mechanism: PebbleKit JS fires <code>showConfiguration</code> → you call <code>Pebble.openURL()</code> → the user edits a webview (hosted by you, or generated locally by Clay) → it closes via <code>pebblejs://close#…</code> → <code>webviewclosed</code> hands you the data → you <code>sendAppMessage()</code> it to the watch, which persists it. Clay automates this whole dance.",
+          links: [],
+        },
+        pkmobile: {
+          name: "PebbleKit iOS / Android",
+          layer: "Phone (your own native app)",
+          status: "legacy",
+          lang: "Obj-C / Java",
+          purpose:
+            "Native mobile libraries so a developer's standalone phone app can talk to a watch app by UUID.",
+          body: "Different from PebbleKit <i>JS</i>: this lives inside your own separately-installed app, not inside the watchapp bundle. Provides AppMessage, the Sports API, and batch Data-Logging retrieval. A 2014-era native path, now revived by the new ecosystem but rarely the first choice for a simple face.",
+          links: [["PebbleKit docs", "https://developer.repebble.com/docs/"]],
+        },
+
+        // watch
+        csdk: {
+          name: "C SDK",
+          layer: "Watch (native)",
+          status: "core",
+          lang: "C",
+          purpose: "The original, full-power way to build watchfaces and watchapps natively.",
+          body: "An event-driven C program: <code>init → app_event_loop() → deinit</code>. UI is a tree of <b>Windows</b> and <b>Layers</b> drawn into a <b>GContext</b> on demand; subscribe to services (tick, battery, accelerometer, health). A <b>watchface</b> passively shows time (no buttons); a <b>watchapp</b> is interactive (full buttons, menus, action bar). Builds to a <code>.pbw</code>.",
+          links: [["C SDK docs", "https://developer.repebble.com/docs/"]],
+        },
+        alloy: {
+          name: "Alloy",
+          layer: "Watch (JS engine)",
+          status: "core",
+          lang: "JavaScript / TypeScript",
+          purpose:
+            "The modern recommended way to write faces & apps in JS/TS that run natively on the watch.",
+          body: "Powered by <b>Moddable's XS</b> JavaScript engine, with the <b>Poco</b>/Commodetto renderer for graphics. Real JS/TypeScript executing on-watch — no C, and unlike Rocky.js it isn't limited to watchfaces. Scaffolded with <code>pebble new-project --alloy</code>; this very repo is built on it.",
+          links: [["Alloy guide", "https://developer.repebble.com/guides/alloy/"]],
+        },
+        rocky: {
+          name: "Rocky.js",
+          layer: "Watch (JS engine)",
+          status: "legacy",
+          lang: "JavaScript (ES5.1)",
+          purpose: "The first attempt at on-watch JavaScript — watchfaces only.",
+          body: "Introduced 2016 on the JerryScript engine, with a Canvas-style 2D drawing API. It pairs with PebbleKit JS via a simple <code>postMessage</code> channel. Never left beta before Pebble's shutdown, and is effectively <b>superseded by Alloy</b> for new work.",
+          links: [],
+        },
+        pebblejs: {
+          name: "pebble.js",
+          layer: "Phone JS, mirrored to watch",
+          status: "legacy",
+          lang: "JavaScript",
+          purpose:
+            "A 2014-era framework for writing a whole app in JS, with the UI mirrored onto the watch.",
+          body: "The JS actually ran on the <i>phone</i> and remote-controlled a thin UI on the watch over Bluetooth — every interaction was a round-trip, so it was slow and power-hungry. Distinct from Rocky.js (runs on-watch) and PebbleKit JS (comms glue). Abandoned.",
+          links: [],
+        },
+        appmessage: {
+          name: "AppMessage",
+          layer: "Watch ⇄ Phone",
+          status: "core",
+          lang: "C / JS",
+          purpose: "The core key/value messaging channel between the watch app and the phone.",
+          body: "Bidirectional dictionaries of typed values with separate inbox (phone→watch) and outbox (watch→phone) buffers; every message is ACK'd/NACK'd. Keys are declared up front in <code>package.json</code> as <code>messageKeys</code>. This is how nearly all watch↔phone data moves (Alloy/Rocky wrap it in a friendlier <code>postMessage</code>).",
+          links: [["AppMessage docs", "https://developer.repebble.com/docs/"]],
+        },
+        worker: {
+          name: "Background Worker",
+          layer: "Watch (native)",
+          status: "core",
+          lang: "C",
+          purpose: "A tiny separate binary that keeps running after your app closes.",
+          body: "Used for things like step counting that must continue in the background. Severely memory-limited (~10.5 kB heap). Communicates with the foreground app via persistent storage, data logging, or real-time worker messages.",
+          links: [],
+        },
+        datalog: {
+          name: "Data Logging",
+          layer: "Watch → Phone",
+          status: "core",
+          lang: "C",
+          purpose: "Record data on the watch, then batch-spool it to the phone when connected.",
+          body: "One-way (watch→phone), good for offline/low-power capture (sensor logs, activity). The phone-side native SDKs retrieve the batched sessions. Distinct from real-time AppMessage.",
+          links: [],
+        },
+        pebbleos: {
+          name: "PebbleOS",
+          layer: "Watch (firmware)",
+          status: "core",
+          lang: "C (+ Python tooling)",
+          purpose: "The watch's operating system — the foundation every app runs on.",
+          body: "Open-sourced under Apache-2.0 in Jan 2025 (Google's release at <code>github.com/google/pebble</code>); the actively-maintained fork is <code>github.com/coredevices/PebbleOS</code>. Built on FreeRTOS, the NimBLE Bluetooth stack, and the JerryScript JS engine. Some proprietary blobs (fonts, voice, BT) are added back separately.",
+          links: [
+            ["coredevices/PebbleOS", "https://github.com/coredevices/PebbleOS"],
+            ["google/pebble", "https://github.com/google/pebble"],
+          ],
+        },
+
+        // toolchain
+        cloudpebble: {
+          name: "CloudPebble",
+          layer: "Tooling (browser IDE)",
+          status: "core",
+          lang: "—",
+          purpose:
+            "Write, compile and emulate Pebble apps entirely in the browser — zero local install.",
+          body: "The classic web IDE, relaunched by Core Devices at <code>cloudpebble.repebble.com</code> with support for the new Alloy SDK. Hides the whole local toolchain behind a website. Great for getting started.",
+          links: [["CloudPebble", "https://cloudpebble.repebble.com"]],
+        },
+        pebbletool: {
+          name: "pebble CLI (pebble-tool)",
+          layer: "Tooling (local CLI)",
+          status: "core",
+          lang: "Python",
+          purpose:
+            "The command you drive everything with locally: new-project, build, install, run, logs.",
+          body: "Installed these days with <code>uv tool install pebble-tool</code>, then <code>pebble sdk install latest</code>. Commands: <code>pebble new-project</code>, <code>pebble build</code>, <code>pebble install --emulator basalt</code>. The local counterpart to CloudPebble.",
+          links: [["pebble-tool", "https://github.com/coredevices/pebble-tool"]],
+        },
+        vscode: {
+          name: "VS Code extension",
+          layer: "Tooling (local IDE)",
+          status: "core",
+          lang: "—",
+          purpose: "Editor integration for building/running Pebble projects from VS Code.",
+          body: "Wraps the pebble CLI with IDE conveniences. Maintained by Core Devices.",
+          links: [["pebble-vscode", "https://github.com/coredevices/pebble-vscode"]],
+        },
+        waf: {
+          name: "Waf",
+          layer: "Tooling (build system)",
+          status: "core",
+          lang: "Python",
+          purpose: "The build system that compiles your project for each target platform.",
+          body: "The same Python-based build system used by the firmware. <code>pebble build</code> invokes it; it compiles per platform (aplite/basalt/…) and packages the result into a single <code>.pbw</code> bundle.",
+          links: [],
+        },
+        qemu: {
+          name: "QEMU emulator",
+          layer: "Tooling (emulator)",
+          status: "core",
+          lang: "—",
+          purpose: "Run a virtual Pebble on your computer — no physical watch needed.",
+          body: "A QEMU fork that emulates Pebble hardware per platform. <code>pebble install --emulator emery</code> boots your app in it. Cannot run inside most CI sandboxes (needs SDL/graphics).",
+          links: [["coredevices/qemu", "https://github.com/coredevices/qemu"]],
+        },
+        pkjsdev: {
+          name: "pypkjs",
+          layer: "Tooling (emulator support)",
+          status: "core",
+          lang: "Python",
+          purpose: "Runs the phone-JavaScript half of your app while you're using the emulator.",
+          body: "Because there's no real phone in the emulator, pypkjs stands in for the PebbleKit JS runtime so HTTP/config/geolocation work during local testing.",
+          links: [["pypkjs", "https://github.com/coredevices/pypkjs"]],
+        },
+      };
+
+      // ---------- detail panel ----------
+      const detail = document.getElementById("detail");
+      const statusLabel = {
+        core: "Core Devices · current",
+        rebble: "Rebble · community",
+        legacy: "legacy / superseded",
+        future: "new / in flux",
+      };
+      let activeId = null;
+
+      function show(id) {
+        const d = DATA[id];
+        if (!d) return;
+        // active highlight
+        document.querySelectorAll(".node.active").forEach((n) => n.classList.remove("active"));
+        document
+          .querySelectorAll('.node[data-id="' + id + '"]')
+          .forEach((n) => n.classList.add("active"));
+        activeId = id;
+        const links = (d.links || [])
+          .map((l) => `<a href="${l[1]}" target="_blank" rel="noopener">${l[0]} ↗</a>`)
+          .join("");
+        detail.innerHTML = `
+    <h4>${d.name}<span class="pill" style="color:var(--${d.status === "legacy" ? "legacy" : d.status === "future" ? "future" : d.status});border-color:var(--${d.status === "legacy" ? "legacy" : d.status === "future" ? "future" : d.status})">${statusLabel[d.status]}</span></h4>
+    <div class="meta"><span>Runs on: <b>${d.layer}</b></span><span>Language: <b>${d.lang}</b></span><span>Purpose: <b>${d.purpose}</b></span></div>
+    <p class="dbody">${d.body}</p>
+    <div class="links">${links}</div>`;
+        detail.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      }
+
+      document
+        .querySelectorAll(".node[data-id]")
+        .forEach((n) => n.addEventListener("click", () => show(n.dataset.id)));
+      document
+        .querySelectorAll("#matrix tr[data-id]")
+        .forEach((r) => r.addEventListener("click", () => show(r.dataset.id)));
+      document
+        .querySelectorAll(".fstep li[data-id]")
+        .forEach((li) => li.addEventListener("click", () => show(li.dataset.id)));
+
+      // ---------- hide-legacy toggle ----------
+      document.getElementById("hideLegacy").addEventListener("change", (e) => {
+        document.body.classList.toggle("hide-legacy", e.target.checked);
+      });
+    </script>
+  </body>
+</html>
