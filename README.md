@@ -47,6 +47,14 @@ the build, so it stays `.js`.
 
 ## 1. Set up the toolchain
 
+This repo uses a **git submodule** (train artwork) and **Git LFS** (binary resources
+like screenshots and baked images). Right after cloning:
+
+```bash
+git submodule update --init        # fetch the ns-treinen artwork
+git lfs install && git lfs pull    # fetch real PNG bytes (else they're LFS pointers)
+```
+
 You need the Pebble SDK (`pebble-tool` + a downloaded SDK) plus Node/pnpm. Pick
 **one** of the following.
 
