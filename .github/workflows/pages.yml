@@ -20,7 +20,12 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      # `lfs: true` is required — the site embeds committed screenshots
+      # (watchfaces/*/screenshots/*.png), which are stored in Git LFS. Without
+      # it checkout fetches pointer files and the deployed images are broken.
       - uses: actions/checkout@v4
+        with:
+          lfs: true
 
       - uses: actions/setup-node@v4
         with:
