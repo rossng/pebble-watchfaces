@@ -20,6 +20,8 @@ importers:
 
   tools/emu-tui: {}
 
+  watchfaces/passing-trains: {}
+
   watchfaces/simple-time:
     devDependencies:
       typescript:
