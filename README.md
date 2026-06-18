@@ -1,8 +1,10 @@
 # pebble-watchfaces
 
-A monorepo of [Pebble](https://repebble.com) watchfaces built with the **Alloy**
-SDK — Pebble's modern JavaScript framework (powered by Moddable's XS engine), so
-faces are written in **TypeScript** and run natively on the watch.
+A monorepo of [Pebble](https://repebble.com) watchfaces. Most are built with the
+**Alloy** SDK — Pebble's modern JavaScript framework (powered by Moddable's XS
+engine), so those faces are written in **TypeScript** and run natively on the
+watch. One face (`passing-trains`) drops to plain **native C** for framebuffer
+access Alloy can't give.
 
 Tooling is 2026-modern: **pnpm** workspaces, **TypeScript 6** (ESM watch code),
 the **oxc** stack (**oxlint** + **oxfmt**) for lint/format, and a **Nix flake**
@@ -40,10 +42,11 @@ pebble-watchfaces/
                 └── manifest.json  # Moddable manifest: modules + TS typings + skipLibCheck
 ```
 
-Each watchface is a self-contained Pebble Alloy project: `pebble build` runs from
-the project directory, and `package.json`'s `pebble` block is its app manifest.
-Only `src/embeddedjs` is TypeScript; `src/pkjs` is bundled as plain JavaScript by
-the build, so it stays `.js`.
+Each watchface is a self-contained project: `pebble build` runs from the project
+directory, and `package.json`'s `pebble` block is its app manifest. In an Alloy
+face only `src/embeddedjs` is TypeScript; `src/pkjs` is bundled as plain
+JavaScript by the build, so it stays `.js`. The native-C face (`passing-trains`)
+instead puts its watch code in `src/c/**/*.c` — see its README for the shape.
 
 ## 1. Set up the toolchain
 

@@ -59,6 +59,8 @@ async function collectWatchfaces() {
       platforms: peb.targetPlatforms ?? [],
       isWatchface: peb.watchapp?.watchface !== false,
       sdkVersion: peb.sdkVersion,
+      // Alloy faces declare `projectType: moddable`; native-C faces don't.
+      tech: peb.projectType === "moddable" ? "TypeScript" : "C",
       shots,
     });
   }
@@ -127,6 +129,7 @@ function faceCard(face) {
           <h3>${esc(face.name)}</h3>
           <span class="kind">${kind}</span>
         </div>
+        <span class="tech">${esc(face.tech)}</span>
         ${face.description ? `<p class="desc">${esc(face.description)}</p>` : ""}
         <div class="chips">${chips}</div>
         <div class="card-meta">
@@ -158,7 +161,7 @@ function page(faces, docs) {
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Pebble Watchfaces</title>
-<meta name="description" content="Pebble Alloy watchfaces in TypeScript, plus a field guide to the Pebble ecosystem." />
+<meta name="description" content="Pebble watchfaces, plus a field guide to the Pebble ecosystem." />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;500;600;700&family=Silkscreen:wght@400;700&display=swap" rel="stylesheet" />
@@ -207,6 +210,9 @@ function page(faces, docs) {
   .card-head h3{margin:0;font-family:var(--pixel);font-weight:600;font-size:18px}
   .kind{font-family:var(--label);font-size:9px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink);
     background:var(--watch);border:2px solid var(--line);border-radius:6px;padding:3px 6px;white-space:nowrap}
+  .tech{display:inline-block;margin:6px 0 0;font-family:var(--mono);font-size:10px;font-weight:600;
+    letter-spacing:.02em;color:var(--ink-dim)}
+  .tech::before{content:"◆ ";color:var(--watch)}
   .desc{margin:6px 0 8px;font-size:13px;color:var(--ink-dim)}
   .chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
   .chip{font-family:var(--mono);font-size:10.5px;font-weight:600;color:var(--ink);background:var(--core-soft);
@@ -231,14 +237,14 @@ function page(faces, docs) {
 </head>
 <body>
 <header>
-  <p class="kicker">Pebble · Alloy · TypeScript</p>
+  <p class="kicker">Pebble</p>
   <h1>Pebble Watchfaces</h1>
-  <p class="lede">TypeScript watchfaces for the revived <a href="https://repebble.com">Pebble</a>, built on <a href="https://developer.repebble.com/guides/alloy/">Alloy</a> — plus a field guide to the ecosystem.</p>
+  <p class="lede">Watchfaces for the revived <a href="https://repebble.com">Pebble</a>, plus a field guide to the ecosystem.</p>
 </header>
 <div class="wrap">
   <section>
     <h2>⌚ Watchfaces</h2>
-    <p class="section-lede">One Alloy project each, under <code style="font-family:var(--mono)">watchfaces/</code>.</p>
+    <p class="section-lede">One self-contained project each, under <code style="font-family:var(--mono)">watchfaces/</code>.</p>
     ${faceSection}
   </section>
   ${
