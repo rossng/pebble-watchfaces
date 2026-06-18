@@ -1,0 +1,96 @@
+{
+  "name": "passing-trains",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A native Pebble C watchface that slowly pans along a random Dutch (NS) train, minute by minute, scaled to fill the screen.",
+  "keywords": [
+    "pebble-app"
+  ],
+  "author": "Ross Gardiner",
+  "scripts": {
+    "prepare:images": "node scripts/prepare-images.mjs",
+    "build": "pebble build",
+    "emulator": "pebble install --emulator emery",
+    "dev": "pebble build && pebble install --emulator emery && node ../../tools/emu-tui/bin/emu-tui.js --emulator emery",
+    "reset": "pebble kill && pebble wipe",
+    "deploy:phone": "pebble install --phone \"$PEBBLE_PHONE\"",
+    "deploy:cloud": "pebble install --cloudpebble",
+    "publish:appstore": "pebble build && pebble publish"
+  },
+  "pebble": {
+    "displayName": "Passing Trains",
+    "uuid": "c26944b6-737b-4764-b719-240bbc6be77b",
+    "sdkVersion": "3",
+    "targetPlatforms": [
+      "emery",
+      "gabbro"
+    ],
+    "watchapp": {
+      "watchface": true
+    },
+    "resources": {
+      "media": [
+        {
+          "type": "bitmap",
+          "name": "TRAIN_DM90_2",
+          "file": "images/dm90_2.png",
+          "memoryFormat": "8Bit"
+        },
+        {
+          "type": "bitmap",
+          "name": "TRAIN_WINK_2_ARRIVA",
+          "file": "images/wink_2_arriva.png",
+          "memoryFormat": "8Bit"
+        },
+        {
+          "type": "bitmap",
+          "name": "TRAIN_SGMM_2",
+          "file": "images/sgmm_2.png",
+          "memoryFormat": "8Bit"
+        },
+        {
+          "type": "bitmap",
+          "name": "TRAIN_SNG_3",
+          "file": "images/sng_3.png",
+          "memoryFormat": "8Bit"
+        },
+        {
+          "type": "bitmap",
+          "name": "TRAIN_SLT_4",
+          "file": "images/slt_4.png",
+          "memoryFormat": "8Bit"
+        },
+        {
+          "type": "bitmap",
+          "name": "TRAIN_GTW_6_ARRIVA",
+          "file": "images/gtw_6_arriva.png",
+          "memoryFormat": "8Bit"
+        },
+        {
+          "type": "bitmap",
+          "name": "TRAIN_ICM_3",
+          "file": "images/icm_3.png",
+          "memoryFormat": "8Bit"
+        },
+        {
+          "type": "bitmap",
+          "name": "TRAIN_DDZ_4",
+          "file": "images/ddz_4.png",
+          "memoryFormat": "8Bit"
+        },
+        {
+          "type": "bitmap",
+          "name": "TRAIN_VIRM_4",
+          "file": "images/virm_4.png",
+          "memoryFormat": "8Bit"
+        },
+        {
+          "type": "bitmap",
+          "name": "TRAIN_ICNG_5",
+          "file": "images/icng_5.png",
+          "memoryFormat": "8Bit"
+        }
+      ]
+    }
+  }
+}
