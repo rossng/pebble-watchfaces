@@ -16,6 +16,9 @@ dist/
 # Generated GitHub Pages site
 _site/
 
+# Rollover GIFs captured by `pebble publish` (timestamped, regenerated each run)
+watchfaces/*/screenshots/*.gif
+
 # Nix / direnv
 .direnv/
 result
