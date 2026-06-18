@@ -1,0 +1,3 @@
+[submodule "watchfaces/passing-trains/ns-treinen"]
+	path = watchfaces/passing-trains/ns-treinen
+	url = https://github.com/rossng/ns-treinen
