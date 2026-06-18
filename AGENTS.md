@@ -8,10 +8,12 @@ detail lives in [README.md](README.md); this file is the fast path for agents.
 
 - `watchfaces/<name>/` — one self-contained Alloy project each; `src/embeddedjs/main.ts`
   is the watch code. **Use `watchfaces/simple-time/` as the template — it is already
-  correct.**
+  correct.** (Exception: `passing-trains/` is a native **C** face, not Alloy — it needs
+  framebuffer-level scaling Alloy can't do; see its README and the colour-image gotchas.)
 - `types/pebble-alloy.d.ts` — ambient editor types (Poco / `watch` / `screen`). The
   _real_ types come from the SDK at build time; these just keep the editor happy.
-- `scripts/` — `build-site.mjs` (Pages site), `capture-screenshots.mjs`.
+- `scripts/` — `build-site.mjs` (Pages site), `capture-screenshots.mjs`,
+  `emu-check.sh` (install a build + report RUNNING/BOOTLOOP, no orphaned emulators).
   `tools/emu-tui/` — keyboard control panel for a running emulator.
 - `flake.nix` — dev shell (`nix develop`). `.github/workflows/` — smoke / pages / screenshots.
 
@@ -96,6 +98,81 @@ adaptations below — the template already has them, so copying is simpler.)
   clock-format JS API). Screenshots therefore show real time, not a pinned time.
 - **Keep the Nix shell as `mkShellNoCC`.** Plain `mkShell` leaks `STRINGS`/`AR`/… into
   Moddable's `make`, which then fails with `No rule to make target 'strings'`.
+- **Never grow the XS heap in `mdbl.c` — it's what makes a face "show in the picker
+  but not launch".** The XS engine on Pebble runs in a _fixed_ heap (≈32 KB static,
+  8 KB chunk by default — see `creation` in Moddable's
+  `build/devices/pebble/manifest.json`). Passing an enlarged `.chunk`/`.static` to
+  `moddable_createMachine` makes machine creation fail _silently_: the mod is never
+  loaded (no `xsHost.c> Found mod` in `pebble logs`), the app shell exits immediately,
+  and the watchface appears in the picker but bounces straight back when selected.
+  Keep it `moddable_createMachine(NULL)`. (This — not archive size — was the real
+  cause of passing-trains' "won't launch"; an earlier write-up blamed a flash cap.)
+  Corollary: you cannot upscale into a screen-sized RAM bitmap, and `fillPattern`
+  can't stretch — so colour artwork is drawn straight from flash at the size it was
+  baked.
+- **Colour images: `argb2222` only, drawn with `fillPattern`.** Pebble's blitter
+  draws exactly one colour format — native `argb2222` (1 byte/px, 64 colours,
+  uncompressed) — and only via `fillPattern`; `drawBitmap` `PBL_ASSERT`s on it and the
+  watch **bootloops**. `parseBMP` is no help: it reads only standard `.bmp` and yields
+  formats the blitter rejects. Every image is baked uncompressed into the `mc.xsa` mod
+  archive, and cost grows with band-height², so colour artwork is budgeted by
+  band-height × count — but a ~100 KB mod loads fine (the 1 MB `MAX_RESOURCES_SIZE`
+  _is_ a red herring, but the older "~120 KB → bootloop" claim was a misdiagnosis of
+  the heap bug above). The Alloy recipe for this — hand-built `.bm4` bitmaps as
+  manifest `data`, wrapped in a `Bitmap` and blitted a slice at a time with
+  `fillPattern` — is preserved in this repo's git history for `passing-trains`.
+- **Need to _scale_ an image, or fill the full screen with colour? You must leave
+  Alloy.** Moddable's Poco draws bitmaps **unscaled** (the only `scale()` is for
+  vector Pebble Draw Commands), exposes no framebuffer, and you cannot add a custom
+  native — the app SDK ships no XS headers and the only Alloy entry point is
+  `moddable_createMachine`; the `native("xs_…")` resolver is firmware-sealed. So
+  runtime upscaling is impossible in Alloy from every angle. The escape hatch is a
+  plain **native C watchface** — see the **Native C watchfaces** section below;
+  `watchfaces/passing-trains/` is the repo's one example.
+- **Verifying an image face? Use `scripts/emu-check.sh <platform> <dir>`.** It cleans
+  up orphaned `qemu`/`pypkjs` (the pile-up that corrupts the flash image), installs
+  with cold-boot retries, and reports `RUNNING` / `BOOTLOOP` — far more reliable than
+  eyeballing a screenshot that may just be slow to warm up. A timed-out screenshot
+  across all retries means a bootloop (an oversized archive, or a hard fault in a
+  native-C face); a clean "install an app" face means a _graceful_ JS exception instead.
+
+## Native C watchfaces (the escape hatch)
+
+`watchfaces/passing-trains/` is the repo's one non-Alloy face: plain Pebble C, because
+filling the screen with a _scaled_ image needs framebuffer access Alloy can't give (see
+the colour-image gotchas). If you need the same, the reusable lessons:
+
+- **Project shape.** Drop `projectType: moddable` / `enableMultiJS` from `package.json`;
+  declare art under `pebble.resources.media` (`{type:"bitmap", memoryFormat:"8Bit"}`).
+  `src/c/**/*.c` is auto-compiled by the stock `wscript` — no `tsc`, no `typecheck`
+  script, pkjs optional. `pebble build` works the same (no Moddable prebuild). Build
+  through `pnpm` still, for consistency.
+- **Direct pixels.** `graphics_capture_frame_buffer(ctx)` → per row
+  `gbitmap_get_data_row_info(fb, y)` whose `min_x`/`max_x` mask the round (gabbro)
+  display for free. On colour Pebble a framebuffer byte is `GColor8` = `argb2222`
+  (`(a<<6)|(r<<4)|(g<<2)|b`), **identical to an `8Bit` source bitmap**, so blits are a
+  raw byte copy and you can scale/composite by hand. `graphics_release_frame_buffer`,
+  then draw text/shapes the normal (clip-aware) way.
+- **RAM is the budget, not flash.** A `gbitmap` is uncompressed in RAM
+  (`width × height` bytes); PNG resources are compressed in flash (~KB) but decoded on
+  load (the decode needs a transient buffer). App heap is ~125 KB (emery/gabbro). So
+  what caps you is _how many big bitmaps are resident at once_, not how many you ship —
+  keep large images small and load lazily. Verify the worst case at runtime with
+  `heap_bytes_free()`, and NULL-check every `gbitmap_create_with_resource` (NULL = OOM;
+  guard it and draw a fallback rather than dereferencing → hard fault).
+- **`tick_timer_service_subscribe` does NOT fire on subscribe** (unlike Alloy's
+  `minutechange`); the first tick lands on the next minute boundary, often seconds after
+  launch. To hold an initial state for the first minute, skip the first tick.
+- **Generated resources.** A Node + ImageMagick `scripts/prepare-images.mjs` bakes the
+  art and emits _both_ `package.json`'s `resources.media` and a generated `trains.h`
+  (resource ids, display names, per-item tweaks). Don't hand-edit generated files;
+  re-run the script. Tune one or two constants at the top (e.g. body height) rather
+  than the pipeline.
+- **Debugging "shows in the picker but won't launch".** In Alloy it's the XS heap
+  (the `mdbl.c` gotcha); in native C it's usually a hard fault — `APP_LOG` + a NULL
+  check on each resource load pinpoints it. The emulator's cold-boot flakiness bites
+  hardest here: the first install after a wipe (or after switching platforms) routinely
+  times out — warm the emulator with one install, wait, then retry in a loop.
 
 ## Other tasks
 
@@ -104,6 +181,9 @@ adaptations below — the template already has them, so copying is simpler.)
 - `pnpm lint` / `pnpm format` / `pnpm typecheck` (root, across the workspace).
 - Committed: source and `watchfaces/*/screenshots/*.png`. Gitignored: `build/`,
   `*.pbw`, `_site/`, `package-lock.json`.
+- **Binary resources use Git LFS** (`*.png` and friends, via `.gitattributes`). A fresh
+  clone needs `git lfs install && git lfs pull` to fetch real bytes (otherwise you get
+  pointer files); `nix develop` provides `git-lfs`.
 
 ## Before calling it done
 
