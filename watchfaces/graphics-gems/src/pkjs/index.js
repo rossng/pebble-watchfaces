@@ -49,9 +49,5 @@ Pebble.addEventListener("webviewclosed", function (e) {
     return;
   }
   localStorage.setItem("gg_settings", JSON.stringify(o));
-  Pebble.sendAppMessage(
-    o,
-    function () {},
-    function () {},
-  );
+  Pebble.sendAppMessage(o); // success/failure callbacks omitted (keeps this ES5-clean)
 });
