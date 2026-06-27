@@ -1,0 +1,154 @@
+<!doctype html>
+<!--
+  Hosted settings page for the Graphics Gems watchface.
+
+  The Pebble phone app's config webview needs a real https URL (a data: URI just
+  hangs on "loading"), so this is served from the project's GitHub Pages site and
+  src/pkjs/index.js points `Pebble.openURL` at it. Current settings arrive in the
+  URL hash (so the form pre-fills); the new values are posted back through
+  pebblejs://close. Keep the keys in sync with package.json `messageKeys`.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Graphics Gems — Settings</title>
+    <style>
+      body {
+        font-family: -apple-system, Helvetica, Arial, sans-serif;
+        margin: 0;
+        background: #111;
+        color: #eee;
+      }
+      header {
+        background: #000;
+        padding: 22px 18px;
+        font-size: 22px;
+        font-weight: 600;
+        border-bottom: 1px solid #333;
+      }
+      .row {
+        padding: 16px 18px;
+        border-bottom: 1px solid #222;
+      }
+      label {
+        display: block;
+        font-size: 13px;
+        color: #9ad;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin-bottom: 8px;
+      }
+      select {
+        width: 100%;
+        padding: 12px;
+        font-size: 17px;
+        background: #1c1c1c;
+        color: #fff;
+        border: 1px solid #333;
+        border-radius: 8px;
+      }
+      .tog {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .tog label {
+        margin: 0;
+      }
+      input[type="checkbox"] {
+        width: 26px;
+        height: 26px;
+      }
+      button {
+        width: 100%;
+        padding: 16px;
+        font-size: 18px;
+        font-weight: 600;
+        background: #2a7;
+        color: #000;
+        border: 0;
+        border-radius: 10px;
+        margin: 18px 0;
+      }
+      .wrap {
+        padding: 0 18px;
+      }
+    </style>
+  </head>
+  <body>
+    <header>Graphics Gems</header>
+    <div class="row">
+      <label>Render mode</label>
+      <select id="render">
+        <option value="0">Wireframe</option>
+        <option value="1">Unlit (solid)</option>
+        <option value="2">Lambert (diffuse)</option>
+        <option value="3">Phong (specular)</option>
+      </select>
+    </div>
+    <div class="row">
+      <label>Rotation</label>
+      <select id="rotation">
+        <option value="0">Continuous tumble</option>
+        <option value="1">Spin on tap / shake</option>
+      </select>
+    </div>
+    <div class="row">
+      <label>Model</label>
+      <select id="model">
+        <option value="255">Cycle (change hourly)</option>
+        <option value="0">Teapot</option>
+        <option value="1">Bunny</option>
+        <option value="2">Icosphere</option>
+        <option value="3">Torus knot</option>
+      </select>
+    </div>
+    <div class="row">
+      <label>Time layout</label>
+      <select id="layout">
+        <option value="0">HH:MM (wide)</option>
+        <option value="1">Stacked (largest)</option>
+      </select>
+    </div>
+    <div class="row tog">
+      <label>Translucent time</label><input type="checkbox" id="translucent" />
+    </div>
+    <div class="row tog"><label>Jumble on shake</label><input type="checkbox" id="jumble" /></div>
+    <div class="wrap"><button id="save">Save</button></div>
+    <script>
+      function current() {
+        try {
+          return JSON.parse(decodeURIComponent(location.hash.slice(1))) || {};
+        } catch (e) {
+          return {};
+        }
+      }
+      var s = current();
+      function sel(id, v, def) {
+        document.getElementById(id).value = String(v != null ? v : def);
+      }
+      sel("render", s.RENDER_MODE, 3);
+      sel("rotation", s.ROTATION_MODE, 0);
+      sel("model", s.MODEL_SEL, 255);
+      sel("layout", s.TEXT_LAYOUT, 0);
+      document.getElementById("translucent").checked = (
+        s.TRANSLUCENT_TEXT != null ? s.TRANSLUCENT_TEXT : 1
+      )
+        ? true
+        : false;
+      document.getElementById("jumble").checked = s.JUMBLE ? true : false;
+      document.getElementById("save").addEventListener("click", function () {
+        var o = {
+          RENDER_MODE: +document.getElementById("render").value,
+          ROTATION_MODE: +document.getElementById("rotation").value,
+          MODEL_SEL: +document.getElementById("model").value,
+          TEXT_LAYOUT: +document.getElementById("layout").value,
+          TRANSLUCENT_TEXT: document.getElementById("translucent").checked ? 1 : 0,
+          JUMBLE: document.getElementById("jumble").checked ? 1 : 0,
+        };
+        location.href = "pebblejs://close#" + encodeURIComponent(JSON.stringify(o));
+      });
+    </script>
+  </body>
+</html>
