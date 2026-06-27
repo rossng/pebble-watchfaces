@@ -1,13 +1,12 @@
 {
   "name": "graphics-gems",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "private": true,
   "description": "A native Pebble C watchface that renders classic computer-graphics research models (Utah teapot, Stanford bunny, and friends) with a tiny software rasterizer, the time floating in the 3D scene.",
   "keywords": [
     "pebble-app"
   ],
   "author": "Ross Gardiner",
-  "appStoreUrl": "https://apps.repebble.com/da990f30581f4c9aaaa6fb6d",
   "scripts": {
     "bake:models": "node scripts/bake-models.mjs",
     "build": "pebble build",
@@ -18,6 +17,7 @@
     "deploy:cloud": "pebble install --cloudpebble",
     "publish:appstore": "pebble build && pebble publish"
   },
+  "appStoreUrl": "https://apps.repebble.com/da990f30581f4c9aaaa6fb6d",
   "pebble": {
     "displayName": "Graphics Gems",
     "uuid": "06586a00-88da-4cb0-b38d-5508e963b923",
