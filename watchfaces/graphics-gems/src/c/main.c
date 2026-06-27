@@ -28,7 +28,9 @@
 #define ROT_SPEED 0.017f     // the normal continuous angular speed (rad/frame)
 #define TORQUE_DAMP 0.97f    // low-pass on the random steering, so the axis drifts smoothly
 #define TORQUE_KICK 0.00003f // how hard the steering is nudged each frame
-#define TAP_SPEED 0.090f     // speed a tap/shake spins up to (~5x normal)
+#define TAP_SPEED 0.090f     // speed a (non-jumble) tap/shake spins up to (~5x normal)
+#define JUMBLE_SPEED 0.150f  // peak spin a jumble shake winds up to before the swap
+#define BOOST_RELAX 0.13f    // faster approach while spinning up to the jumble peak
 #define SPEED_RELAX 0.07f    // per-frame approach back toward the mode's resting speed (~2s)
 #define SETTLE_SPEED 0.008f  // below this, static mode stops animating (settled)
 #define GRAD_TRAVEL_RATE 0.0010f // gradient band travel per frame
@@ -53,9 +55,10 @@ static float s_speed;
 static float s_grad_travel, s_grad_hue;
 
 static AppTimer *s_timer;
-static uint8_t s_cycle_idx;   // which model "cycle" is currently showing
+static uint8_t s_cycle_idx;    // which model "cycle" is currently showing
 static uint8_t s_jumble_model; // when jumble is on, the shake-chosen model...
 static uint8_t s_jumble_mode;  // ...and render mode
+static bool s_jumble_pending;  // a jumble shake is winding up; swap at peak speed
 
 static float frand(void) { return (float)rand() / (float)RAND_MAX; } // [0,1]
 static float frand2(void) { return frand() * 2.0f - 1.0f; }          // [-1,1]
@@ -137,14 +140,37 @@ static void build_rot(float ax, float ay, float az, float *o) {
   mat3(o, rz, t);
 }
 
-// One animation step. The spin speed relaxes toward the mode's resting speed
-// (so a tap boost eases back to normal, or to a standstill in static mode),
-// while the axis drifts via a low-passed random torque. In static mode, once the
-// spin has settled we stop the timer entirely — no animation until the next tap.
+// Pick a fresh random model (never the current one), render mode, and gradient
+// colours — done at the peak of a jumble shake so the swap is hidden in motion.
+static void jumble_swap(void) {
+  uint8_t prev = s_jumble_model;
+  uint8_t m = prev;
+  if (GEM_MODEL_COUNT > 1) {
+    do {
+      m = rand() % GEM_MODEL_COUNT;
+    } while (m == prev);
+  }
+  s_jumble_model = m;
+  s_jumble_mode = rand() % 4;
+  s_grad_hue = frand();
+  s_grad_travel = frand() * 10.0f;
+}
+
+// One animation step. The spin speed eases toward a target — normally the mode's
+// resting speed (so a tap boost slows back to normal, or to a standstill in
+// static mode), but a jumble shake winds it up to JUMBLE_SPEED and swaps the
+// model at the peak, after which it eases back down. The axis drifts via a
+// low-passed random torque. In static mode, once it settles we stop the timer.
 static void anim_cb(void *ctx) {
   s_timer = NULL;
 
-  s_speed += (resting_speed() - s_speed) * SPEED_RELAX;
+  float target = s_jumble_pending ? JUMBLE_SPEED : resting_speed();
+  float relax = s_jumble_pending ? BOOST_RELAX : SPEED_RELAX;
+  s_speed += (target - s_speed) * relax;
+  if (s_jumble_pending && s_speed >= JUMBLE_SPEED * 0.9f) {
+    jumble_swap(); // swap at the top of the spin, then ease back down
+    s_jumble_pending = false;
+  }
 
   // Wander the axis, then renormalise the velocity vector to the current speed.
   s_tx = s_tx * TORQUE_DAMP + frand2() * TORQUE_KICK;
@@ -164,8 +190,10 @@ static void anim_cb(void *ctx) {
   s_grad_hue += GRAD_HUE_RATE;
   layer_mark_dirty(s_layer);
 
-  // Continuous always keeps going; static stops once it has slowed to a settle.
-  bool keep_going = (s_settings.rotation_mode == ROTATE_CONTINUOUS) || (s_speed > SETTLE_SPEED);
+  // Continuous always keeps going; static stops once it has slowed to a settle
+  // (but not mid-jumble, while it's still winding up to the swap).
+  bool keep_going = (s_settings.rotation_mode == ROTATE_CONTINUOUS) || s_jumble_pending ||
+                    (s_speed > SETTLE_SPEED);
   if (keep_going) {
     s_timer = app_timer_register(FRAME_MS, anim_cb, NULL);
   } else {
@@ -227,22 +255,20 @@ static void tick_handler(struct tm *tick_time, TimeUnits units) {
   layer_mark_dirty(s_layer);
 }
 
-// A tap/shake spins the model up to TAP_SPEED in a fresh random direction; the
-// spin then relaxes back toward the mode's resting speed (continuous) or to a
-// standstill (static). With jumble-on-shake it also reshuffles the model, render
-// mode, and gradient colours.
+// A tap/shake spins the model in a fresh random direction, then relaxes back to
+// the mode's resting speed (continuous) or a standstill (static). Plain shakes
+// boost instantly; a jumble shake instead winds *up* to JUMBLE_SPEED and swaps
+// the model (to a different one) at the peak — see anim_cb.
 static void tap_handler(AccelAxisType axis, int32_t direction) {
-  s_speed = TAP_SPEED;
   // A large random nudge re-aims the axis (renormalised to s_speed each frame).
   s_vx += frand2();
   s_vy += frand2();
   s_vz += frand2();
 
   if (s_settings.jumble_on_shake) {
-    s_jumble_model = rand() % GEM_MODEL_COUNT;
-    s_jumble_mode = rand() % 4;
-    s_grad_hue = frand();                          // fresh gradient colours
-    s_grad_travel = frand() * 10.0f;               // ...and a fresh band offset
+    s_jumble_pending = true; // wind up; the swap happens at peak speed
+  } else {
+    s_speed = TAP_SPEED; // instant boost, eases back down
   }
   ensure_animating();
 }
