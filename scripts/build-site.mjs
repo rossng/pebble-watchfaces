@@ -55,6 +55,9 @@ async function collectWatchfaces() {
       name: peb.displayName ?? pkg.name ?? e.name,
       description: pkg.description ?? "",
       author: pkg.author ?? "",
+      // Optional: public listing URL once the face is published to the
+      // (revived) Pebble appstore. Set `appStoreUrl` in the face's package.json.
+      appStoreUrl: pkg.appStoreUrl ?? "",
       uuid: peb.uuid ?? "",
       platforms: peb.targetPlatforms ?? [],
       isWatchface: peb.watchapp?.watchface !== false,
@@ -136,7 +139,10 @@ function faceCard(face) {
           ${face.author ? `<span>by ${esc(face.author)}</span>` : ""}
           ${face.uuid ? `<span class="uuid" title="${esc(face.uuid)}">${esc(face.uuid)}</span>` : ""}
         </div>
-        <a class="src" href="${src}">View source ↗</a>
+        <div class="actions">
+          <a class="src" href="${src}">View source ↗</a>
+          ${face.appStoreUrl ? `<a class="store" href="${esc(face.appStoreUrl)}">Pebble appstore ↗</a>` : ""}
+        </div>
       </div>
     </article>`;
 }
@@ -219,7 +225,12 @@ function page(faces, docs) {
     border:1.5px solid var(--line);border-radius:6px;padding:1px 7px}
   .card-meta{display:flex;flex-direction:column;gap:2px;font-size:11px;color:var(--ink-dim);margin-bottom:8px}
   .uuid{font-family:var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
   .src{font-family:var(--mono);font-size:12px;color:var(--core)}
+  .store{font-family:var(--label);font-size:10px;text-transform:uppercase;letter-spacing:.04em;
+    color:var(--ink);background:var(--watch);border:2px solid var(--line);border-radius:6px;
+    padding:4px 8px;box-shadow:2px 2px 0 var(--ink)}
+  .store:hover{text-decoration:none;transform:translate(-1px,-1px);box-shadow:3px 3px 0 var(--ink)}
   .empty{color:var(--ink-dim)}
   .empty code{font-family:var(--mono);background:var(--panel);border:1.5px solid var(--line);padding:1px 6px;border-radius:5px}
 
