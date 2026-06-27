@@ -79,7 +79,9 @@ A textbook fixed-function pipeline, sized to a watch:
    app heap, and it gives the text-piercing for free).
 3. **Fill.** Triangles are scanline-filled straight into the captured
    framebuffer, clipped per row to the (possibly round) display via each row's
-   `min_x`/`max_x`.
+   `min_x`/`max_x`. Each edge's inverse slope is precomputed once per triangle so
+   the per-scanline span is a multiply-add, not a soft-float divide (which on the
+   FPU-less core costs ~150–200 cycles, and this loop is ~⅔ of the frame).
 
 **Dithered colour.** The displays only show `argb2222` (64 colours, 4 levels per
 channel), so a flat-quantised tint turns into rainbow speckle. Each channel is
@@ -91,8 +93,12 @@ ARMv7-M (no FPU), and the render runs deep in the system's call stack — where
 libm's `sqrtf`/`cosf`/`powf` overflow the small app stack and hard-fault inside
 `__ieee754_*`. So all of it is inlined and call-free: a fast inverse sqrt, a
 Bhaskara `sin`/`cos`, integer-power specular, a triangle-wave gradient. That both
-fixes the fault and keeps each frame cheap enough for the FPU-less core (~12 fps;
-the heaviest model, the knot, is ~75 ms/frame).
+fixes the fault and keeps each frame cheap enough for the FPU-less core. The
+render code is compiled `-O2` (overriding the SDK's default `-Os`); with the
+divide-free fill above, the heaviest model (the knot) is ~79 ms/frame — about
+12 fps. On-device profiling puts the cost at ~⅔ scanline fill, ~⅙ firmware text,
+and only ~⅙ transform + cull + sort, so the triangle budgets (below) are tuned
+against fill, not geometry.
 
 Honest limits of the platform: Phong is per-_face_, not per-pixel — at this
 triangle budget, flat shading with ordered dithering is the right trade, and it
@@ -104,12 +110,17 @@ behind the text on a sparse checker) rather than true blending.
 
 `pnpm bake:models` regenerates the model header. The teapot and bunny are loaded
 from vendored OBJs (`models/`, via Git LFS) and **decimated by vertex
-clustering** to a few-hundred-triangle budget; the icosphere and torus knot are
-generated procedurally. Every model is recentred and scaled to a unit bounding
-sphere. The arrays are `const`, so they live in flash — but note Pebble loads the
-whole app image into RAM, so the static footprint still has to clear the 16-bit
-virtual-size limit (~64 KB); that's why vertices are `int16`, not `float`. Don't
-hand-edit `models.h`; tweak the budgets at the top of the script and re-run.
+clustering**; the icosphere and torus knot are generated procedurally. Every
+model is recentred and scaled to a unit bounding sphere. Per-model triangle
+budgets (teapot ~640, bunny ~580, knot 480, icosphere 320) are sized to keep the
+heaviest pose under the ~80 ms/12 fps frame budget _and_ the static data under
+the 16-bit virtual-size limit (~64 KB) — the arrays are `const` (so they live in
+flash) but Pebble loads the whole app image into RAM, and the per-frame scratch
+arrays scale with the largest model. That size limit is why vertices are `int16`,
+not `float`, and why the near-spherical icosphere is left small (it's already
+smooth in every orientation and would otherwise drive `GEM_MAX` and blow the
+budget). Don't hand-edit `models.h`; tweak the budgets at the top of the script
+and re-run.
 
 The big time uses a bundled geometric font: **Poppins ExtraBold** (OFL),
 rasterised by the build at two sizes (`resources/fonts/`, via Git LFS), with a

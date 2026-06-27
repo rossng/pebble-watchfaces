@@ -21,10 +21,14 @@ import { dirname, join } from "node:path";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
 
-// Per-model triangle budgets. Filling is the per-frame cost, so these are kept
-// small; the silhouette of a classic model survives heavy decimation.
-const TEAPOT_TARGET = 400;
-const BUNNY_TARGET = 440;
+// Per-model triangle budgets. Both rasterizing AND transforming/culling scale
+// with the triangle count (profiled on-device: fill has real per-triangle and
+// per-row overhead, it is not purely coverage-bound), so these are sized to keep
+// the heaviest pose under the ~80 ms/12 fps frame budget after the -O2 + slope
+// rasterizer speedup — and to keep the app's static data under the ~64 KB
+// virtual-size limit. See GEM_MODELS perf table in the README.
+const TEAPOT_TARGET = 720;
+const BUNNY_TARGET = 660;
 
 // ---------------------------------------------------------------------------
 // OBJ parsing
@@ -312,7 +316,7 @@ const models = [
   emit("Teapot", "TEAPOT", loadModel("utah-teapot.obj", TEAPOT_TARGET)),
   emit("Bunny", "BUNNY", loadModel("stanford-bunny.obj", BUNNY_TARGET)),
   emit("Sphere", "SPHERE", icosphere(2)),
-  emit("Knot", "KNOT", torusKnot(2, 3, 32, 6, 0.6)),
+  emit("Knot", "KNOT", torusKnot(2, 3, 40, 6, 0.6)),
 ];
 
 const maxVerts = Math.max(...models.map((m) => m.vcount));
