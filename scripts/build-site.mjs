@@ -352,8 +352,19 @@ async function main() {
     shotCount += names.length;
   }
 
+  // Host any watchface's settings.html (its phone config page) at _site/<slug>/.
+  let configCount = 0;
+  for (const face of faces) {
+    const src = join(ROOT, "watchfaces", face.slug, "settings.html");
+    if (!existsSync(src)) continue;
+    await mkdir(join(OUT, face.slug), { recursive: true });
+    await cp(src, join(OUT, face.slug, "settings.html"));
+    configCount++;
+  }
+
   console.log(
-    `Built _site/ — ${faces.length} watchface(s), ${docs.length} doc page(s), ${shotCount} screenshot(s).`,
+    `Built _site/ — ${faces.length} watchface(s), ${docs.length} doc page(s), ` +
+      `${shotCount} screenshot(s), ${configCount} config page(s).`,
   );
 }
 

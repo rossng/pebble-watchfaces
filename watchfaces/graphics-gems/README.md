@@ -43,11 +43,15 @@ capture the framebuffer and write `argb2222` bytes directly.
 
 ## Settings (phone config page)
 
-Open the watchface's settings in the Pebble phone app (or
-`pebble emu-app-config --emulator emery`). The page is a small self-contained
-HTML document served as a `data:` URI from `src/pkjs/index.js` — the same
-show-form / read-on-close round-trip Clay does, without the extra dependency in
-the workspace. Values are sent over AppMessage and persisted on the watch.
+Open the watchface's settings in the Pebble phone app (the app must declare the
+`configurable` capability in `package.json` for the gear to appear). The form is
+a static page — `settings.html` — hosted on the project's GitHub Pages site;
+`src/pkjs/index.js` points `Pebble.openURL` at it, passing the current settings
+in the URL hash so it pre-fills, and reads the new values back on close. It's
+hosted rather than served as a `data:` URI because the phone app's config webview
+won't load `data:` URIs (it just hangs on "loading"). Values are sent over
+AppMessage and persisted on the watch. The site build copies each face's
+`settings.html` to `_site/<slug>/settings.html`.
 
 | Setting          | Options                                                  |
 | ---------------- | -------------------------------------------------------- |
