@@ -29,8 +29,9 @@
 #define TORQUE_DAMP 0.97f    // low-pass on the random steering, so the axis drifts smoothly
 #define TORQUE_KICK 0.00003f // how hard the steering is nudged each frame
 #define TAP_SPEED 0.090f     // speed a (non-jumble) tap/shake spins up to (~5x normal)
-#define JUMBLE_SPEED 0.150f  // peak spin a jumble shake winds up to before the swap
-#define BOOST_RELAX 0.13f    // faster approach while spinning up to the jumble peak
+#define JUMBLE_SPEED 0.420f  // peak spin a jumble shake winds up to (a fast blur, ~25x normal)
+#define JUMBLE_WINDUP_MS 3200 // hold the fast spin this long before swapping the model
+#define BOOST_RELAX 0.16f    // faster approach while spinning up to the jumble peak
 #define SPEED_RELAX 0.07f    // per-frame approach back toward the mode's resting speed (~2s)
 #define SETTLE_SPEED 0.008f  // below this, static mode stops animating (settled)
 #define GRAD_TRAVEL_RATE 0.0010f // gradient band travel per frame
@@ -58,7 +59,8 @@ static AppTimer *s_timer;
 static uint8_t s_cycle_idx;    // which model "cycle" is currently showing
 static uint8_t s_jumble_model; // when jumble is on, the shake-chosen model...
 static uint8_t s_jumble_mode;  // ...and render mode
-static bool s_jumble_pending;  // a jumble shake is winding up; swap at peak speed
+static bool s_jumble_pending;  // a jumble shake is winding up; swap when held long enough
+static int s_jumble_frames;    // frames spent winding up since the jumble shake
 
 static float frand(void) { return (float)rand() / (float)RAND_MAX; } // [0,1]
 static float frand2(void) { return frand() * 2.0f - 1.0f; }          // [-1,1]
@@ -167,8 +169,9 @@ static void anim_cb(void *ctx) {
   float target = s_jumble_pending ? JUMBLE_SPEED : resting_speed();
   float relax = s_jumble_pending ? BOOST_RELAX : SPEED_RELAX;
   s_speed += (target - s_speed) * relax;
-  if (s_jumble_pending && s_speed >= JUMBLE_SPEED * 0.9f) {
-    jumble_swap(); // swap at the top of the spin, then ease back down
+  // Wind up and hold the fast spin, then swap the model and ease back down.
+  if (s_jumble_pending && ++s_jumble_frames >= JUMBLE_WINDUP_MS / FRAME_MS) {
+    jumble_swap();
     s_jumble_pending = false;
   }
 
@@ -266,7 +269,8 @@ static void tap_handler(AccelAxisType axis, int32_t direction) {
   s_vz += frand2();
 
   if (s_settings.jumble_on_shake) {
-    s_jumble_pending = true; // wind up; the swap happens at peak speed
+    s_jumble_pending = true; // wind up; the swap happens after the hold
+    s_jumble_frames = 0;
   } else {
     s_speed = TAP_SPEED; // instant boost, eases back down
   }
