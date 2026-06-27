@@ -55,6 +55,9 @@ async function collectWatchfaces() {
       name: peb.displayName ?? pkg.name ?? e.name,
       description: pkg.description ?? "",
       author: pkg.author ?? "",
+      // Optional: public listing URL once the face is published to the
+      // (revived) Pebble appstore. Set `appStoreUrl` in the face's package.json.
+      appStoreUrl: pkg.appStoreUrl ?? "",
       uuid: peb.uuid ?? "",
       platforms: peb.targetPlatforms ?? [],
       isWatchface: peb.watchapp?.watchface !== false,
@@ -87,19 +90,37 @@ async function collectDocs() {
 
 const isRoundPlatform = (p) => p === "chalk" || p === "gabbro";
 
-// Prefer a real emulator screenshot; fall back to a stylised SVG placeholder.
+// Prefer captured screenshots — shown as a little scroll/swipe gallery across
+// the platforms — and fall back to a stylised SVG placeholder when there are none.
 function watchPreview(face) {
   const label = esc(face.name);
 
-  // Use a captured screenshot when one exists — pick the first target platform
-  // that has one (so a round watch shows its round screen).
-  const shotPlatform =
-    face.platforms.find((p) => face.shots?.[p]) ?? Object.keys(face.shots ?? {})[0];
-  if (shotPlatform && face.shots[shotPlatform]) {
-    const round = isRoundPlatform(shotPlatform);
-    const src = `shots/${encodeURIComponent(face.slug)}/${esc(face.shots[shotPlatform])}`;
-    return `<div class="preview shot ${round ? "round" : "square"}">
-      <img src="${src}" alt="${label} on ${esc(shotPlatform)}" loading="lazy" />
+  // Captured shots in target-platform order, then any extras.
+  const platforms = [...new Set([...face.platforms, ...Object.keys(face.shots ?? {})])];
+  const shots = platforms.filter((p) => face.shots?.[p]).map((p) => [p, face.shots[p]]);
+
+  if (shots.length) {
+    const slides = shots
+      .map(([p, file]) => {
+        const round = isRoundPlatform(p);
+        const src = `shots/${encodeURIComponent(face.slug)}/${esc(file)}`;
+        return `<div class="slide">
+          <span class="frame ${round ? "round" : "square"}"><img src="${src}" alt="${label} on ${esc(p)}" loading="lazy" /></span>
+          <span class="plat">${esc(p)}</span>
+        </div>`;
+      })
+      .join("");
+    const dots =
+      shots.length > 1
+        ? `<div class="dots">${shots
+            .map(
+              (_, i) =>
+                `<button class="dot${i ? "" : " on"}" type="button" aria-label="Screenshot ${i + 1}"></button>`,
+            )
+            .join("")}</div>`
+        : "";
+    return `<div class="gallery${shots.length > 1 ? " multi" : ""}">
+      <div class="track">${slides}</div>${dots}
     </div>`;
   }
 
@@ -136,7 +157,10 @@ function faceCard(face) {
           ${face.author ? `<span>by ${esc(face.author)}</span>` : ""}
           ${face.uuid ? `<span class="uuid" title="${esc(face.uuid)}">${esc(face.uuid)}</span>` : ""}
         </div>
-        <a class="src" href="${src}">View source ↗</a>
+        <div class="actions">
+          <a class="src" href="${src}">View source ↗</a>
+          ${face.appStoreUrl ? `<a class="store" href="${esc(face.appStoreUrl)}">Pebble appstore ↗</a>` : ""}
+        </div>
       </div>
     </article>`;
 }
@@ -198,13 +222,24 @@ function page(faces, docs) {
   .card{display:flex;gap:14px;border:2px solid var(--line);border-radius:12px;background:var(--panel);padding:14px;
     box-shadow:var(--shadow);transition:transform .1s ease,box-shadow .1s ease}
   .card:hover{transform:translate(-2px,-2px);box-shadow:var(--shadow-lg)}
-  .preview{width:104px;height:104px;flex:0 0 104px}
-  .preview.shot{display:flex;align-items:center;justify-content:center;overflow:hidden;
-    background:#000;border:2px solid var(--line)}
-  .preview.shot.square{border-radius:10px}
-  .preview.shot.round{border-radius:50%}
-  .preview.shot img{width:100%;height:100%;object-fit:contain;image-rendering:pixelated}
-  .preview.shot.round img{border-radius:50%}
+  .preview{width:120px;height:120px;flex:0 0 120px}
+  /* screenshot gallery — scroll/swipe across platforms, click the dots */
+  .gallery{position:relative;width:120px;height:120px;flex:0 0 120px;border:2px solid var(--line);
+    border-radius:10px;overflow:hidden;background:#000}
+  .track{display:flex;width:100%;height:100%;overflow-x:auto;scroll-snap-type:x mandatory;
+    scrollbar-width:none;-ms-overflow-style:none}
+  .track::-webkit-scrollbar{display:none}
+  .multi .track{cursor:grab}
+  .slide{position:relative;flex:0 0 100%;height:100%;scroll-snap-align:center;
+    display:flex;align-items:center;justify-content:center}
+  .frame{width:100%;height:100%;display:flex;align-items:center;justify-content:center}
+  .frame img{width:100%;height:100%;object-fit:contain;image-rendering:pixelated}
+  .frame.round img{border-radius:50%}
+  .plat{position:absolute;left:5px;top:5px;font-family:var(--label);font-size:7px;text-transform:uppercase;
+    letter-spacing:.03em;color:#fff;background:rgba(0,0,0,.55);padding:1px 4px;border-radius:4px}
+  .dots{position:absolute;left:0;right:0;bottom:5px;display:flex;gap:5px;justify-content:center}
+  .dot{width:6px;height:6px;padding:0;border-radius:50%;border:1px solid #fff;background:transparent;cursor:pointer}
+  .dot.on{background:#fff}
   .card-body{min-width:0;flex:1}
   .card-head{display:flex;align-items:center;gap:8px;justify-content:space-between}
   .card-head h3{margin:0;font-family:var(--pixel);font-weight:600;font-size:18px}
@@ -219,7 +254,12 @@ function page(faces, docs) {
     border:1.5px solid var(--line);border-radius:6px;padding:1px 7px}
   .card-meta{display:flex;flex-direction:column;gap:2px;font-size:11px;color:var(--ink-dim);margin-bottom:8px}
   .uuid{font-family:var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
   .src{font-family:var(--mono);font-size:12px;color:var(--core)}
+  .store{font-family:var(--label);font-size:10px;text-transform:uppercase;letter-spacing:.04em;
+    color:var(--ink);background:var(--watch);border:2px solid var(--line);border-radius:6px;
+    padding:4px 8px;box-shadow:2px 2px 0 var(--ink)}
+  .store:hover{text-decoration:none;transform:translate(-1px,-1px);box-shadow:3px 3px 0 var(--ink)}
   .empty{color:var(--ink-dim)}
   .empty code{font-family:var(--mono);background:var(--panel);border:1.5px solid var(--line);padding:1px 6px;border-radius:5px}
 
@@ -260,6 +300,27 @@ function page(faces, docs) {
     Built from <a href="${REPO_URL}">${esc(REPO)}</a> · deployed to GitHub Pages on every push to <code>main</code>.
   </footer>
 </div>
+<script>
+  // Progressive enhancement for the screenshot galleries: clickable dots and an
+  // active-dot indicator. Without JS the track still scrolls/swipes natively.
+  for (const g of document.querySelectorAll(".gallery.multi")) {
+    const track = g.querySelector(".track");
+    const dots = [...g.querySelectorAll(".dot")];
+    dots.forEach((d, i) =>
+      d.addEventListener("click", () =>
+        track.scrollTo({ left: i * track.clientWidth, behavior: "smooth" }),
+      ),
+    );
+    track.addEventListener(
+      "scroll",
+      () => {
+        const i = Math.round(track.scrollLeft / track.clientWidth);
+        dots.forEach((d, k) => d.classList.toggle("on", k === i));
+      },
+      { passive: true },
+    );
+  }
+</script>
 </body>
 </html>
 `;

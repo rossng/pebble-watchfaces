@@ -86,6 +86,10 @@ notes are per-version), and remember the listing is public — the train artwork
 NS (Dutch Railways) livery from the [`ns-treinen`](https://github.com/rossng/ns-treinen)
 submodule, so confirm there's no trademark/branding concern first.
 
+Once it's live, add the public listing URL as a top-level `appStoreUrl` in
+[`package.json`](package.json) — the Pages site (`scripts/build-site.mjs`) renders a
+**Pebble appstore** button on the face's card whenever that field is set.
+
 ## How it draws
 
 The full-height trick is a hand-written scaled blit. A train scaled to ~200 px tall
