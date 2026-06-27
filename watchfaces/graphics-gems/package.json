@@ -1,0 +1,56 @@
+{
+  "name": "graphics-gems",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A native Pebble C watchface that renders classic computer-graphics research models (Utah teapot, Stanford bunny, and friends) with a tiny software rasterizer, the time floating in the 3D scene.",
+  "keywords": [
+    "pebble-app"
+  ],
+  "author": "Ross Gardiner",
+  "scripts": {
+    "bake:models": "node scripts/bake-models.mjs",
+    "build": "pebble build",
+    "emulator": "pebble install --emulator emery",
+    "dev": "pebble build && pebble install --emulator emery && node ../../tools/emu-tui/bin/emu-tui.js --emulator emery",
+    "reset": "pebble kill && pebble wipe",
+    "deploy:phone": "pebble install --phone \"$PEBBLE_PHONE\"",
+    "deploy:cloud": "pebble install --cloudpebble",
+    "publish:appstore": "pebble build && pebble publish"
+  },
+  "pebble": {
+    "displayName": "Graphics Gems",
+    "uuid": "06586a00-88da-4cb0-b38d-5508e963b923",
+    "sdkVersion": "3",
+    "targetPlatforms": [
+      "emery",
+      "gabbro"
+    ],
+    "watchapp": {
+      "watchface": true
+    },
+    "messageKeys": [
+      "RENDER_MODE",
+      "ROTATION_MODE",
+      "MODEL_SEL",
+      "TRANSLUCENT_TEXT",
+      "TEXT_LAYOUT",
+      "JUMBLE"
+    ],
+    "resources": {
+      "media": [
+        {
+          "type": "font",
+          "name": "TIME_WIDE_66",
+          "file": "fonts/Poppins-ExtraBold.ttf",
+          "characterRegex": "[0-9: ]"
+        },
+        {
+          "type": "font",
+          "name": "TIME_TALL_96",
+          "file": "fonts/Poppins-ExtraBold.ttf",
+          "characterRegex": "[0-9 ]"
+        }
+      ]
+    }
+  }
+}
