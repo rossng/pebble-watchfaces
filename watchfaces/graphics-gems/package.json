@@ -7,6 +7,7 @@
     "pebble-app"
   ],
   "author": "Ross Gardiner",
+  "appStoreUrl": "https://apps.repebble.com/da990f30581f4c9aaaa6fb6d",
   "scripts": {
     "bake:models": "node scripts/bake-models.mjs",
     "build": "pebble build",
