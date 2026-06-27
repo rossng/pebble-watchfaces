@@ -124,6 +124,15 @@ static void reset_orientation(void) {
   s_speed = resting_speed();
 }
 
+// Snap the model to a fresh random orientation, still at the resting speed. Used
+// in tap (non-continuous) mode each minute so the model doesn't sit frozen in one
+// pose between taps.
+static void random_orientation(void) {
+  s_ax = frand() * 6.28318f;
+  s_ay = frand() * 6.28318f;
+  s_az = frand() * 6.28318f;
+}
+
 // Build a row-major XYZ rotation matrix from the current Euler angles.
 static void mat3(float *o, const float *A, const float *B) {
   for (int i = 0; i < 3; i++)
@@ -248,6 +257,11 @@ static void tick_handler(struct tm *tick_time, TimeUnits units) {
     s_cycle_idx = (s_cycle_idx + 1) % GEM_MODEL_COUNT;
     reset_orientation(); // the new model appears in its flattering pose
     apply_rotation_mode();
+  }
+  // In tap (non-continuous) mode the model is otherwise still — snap it to a
+  // fresh random orientation each minute so it doesn't sit frozen in one pose.
+  if (s_settings.rotation_mode == ROTATE_TAP) {
+    random_orientation();
   }
   // When idle (tap mode at rest) there's no animation timer, so nudge the
   // gradient here too — the colours still drift, just minute by minute.
