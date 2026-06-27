@@ -7,6 +7,7 @@
     "pebble-app"
   ],
   "author": "Ross Gardiner",
+  "appStoreUrl": "https://apps.repebble.com/passing-trains_828038d2a34d45eb8b3daa37",
   "scripts": {
     "prepare:images": "node scripts/prepare-images.mjs",
     "build": "pebble build",

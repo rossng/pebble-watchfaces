@@ -20,6 +20,8 @@ importers:
 
   tools/emu-tui: {}
 
+  watchfaces/graphics-gems: {}
+
   watchfaces/passing-trains: {}
 
   watchfaces/simple-time:

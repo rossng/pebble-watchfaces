@@ -177,7 +177,9 @@ the colour-image gotchas). If you need the same, the reusable lessons:
 ## Other tasks
 
 - `pnpm screenshots` (root) — capture emulator PNGs into `watchfaces/*/screenshots/`
-  (committed; the site embeds them). `pnpm build:site` — regenerate `_site/`.
+  (committed; the site embeds them). `pnpm build:site` — regenerate `_site/`. A
+  top-level `appStoreUrl` in a face's `package.json` renders a **Pebble appstore**
+  button on its site card (set it once the face is published).
 - `pnpm lint` / `pnpm format` / `pnpm typecheck` (root, across the workspace).
 - Committed: source and `watchfaces/*/screenshots/*.png`. Gitignored: `build/`,
   `*.pbw`, `_site/`, `package-lock.json`.
