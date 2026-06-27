@@ -130,6 +130,17 @@ static void fill_tri(GBitmap *fb, int H, float x0, float y0, float x1, float y1,
   const float ex1[3] = {x1, x2, x0};
   const float ey1[3] = {y1, y2, y0};
 
+  // Precompute each edge's inverse slope once (one divide per edge), so the
+  // per-scanline span is a multiply-add instead of a soft-float divide — the
+  // old `(yc - ay) / (by - ay)` ran thousands of times a frame on an FPU-less
+  // core. Horizontal edges (dy == 0) never satisfy the crossing test below, so
+  // their slope is unused.
+  float dxdy[3];
+  for (int e = 0; e < 3; e++) {
+    float dy = ey1[e] - ey0[e];
+    dxdy[e] = (dy != 0.0f) ? (ex1[e] - ex0[e]) / dy : 0.0f;
+  }
+
   for (int y = ya; y <= yb; y++) {
     if (stipple && (y & 1)) continue; // 1-in-4 with the x test below
     float yc = (float)y + 0.5f;
@@ -137,8 +148,7 @@ static void fill_tri(GBitmap *fb, int H, float x0, float y0, float x1, float y1,
     for (int e = 0; e < 3; e++) {
       float ay = ey0[e], by = ey1[e];
       if ((yc >= ay && yc < by) || (yc >= by && yc < ay)) {
-        float t = (yc - ay) / (by - ay);
-        float x = ex0[e] + t * (ex1[e] - ex0[e]);
+        float x = ex0[e] + (yc - ay) * dxdy[e];
         if (x < xl) xl = x;
         if (x > xr) xr = x;
       }
