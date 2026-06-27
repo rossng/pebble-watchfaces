@@ -4,8 +4,13 @@
 // The settings page is hosted on the project's GitHub Pages site — the Pebble
 // phone app's config webview needs a real https URL (a data: URI just hangs on
 // "loading"). Current settings are passed in via the URL hash so the form can
-// pre-fill; the page posts the new values back through pebblejs://close. Bundled
-// as plain JavaScript (see wscript), so this is not TypeScript.
+// pre-fill; the page posts the new values back through pebblejs://close.
+//
+// Bundled by the SDK's (old) webpack/acorn via enableMultiJS, so keep this to
+// ES5 — e.g. `catch (e)`, not the ES2019 optional catch binding (hence the
+// unused catch bindings, and the disable below).
+
+/* eslint-disable no-unused-vars */
 
 var CONFIG_URL = "https://www.rossng.eu/pebble-watchfaces/graphics-gems/settings.html";
 
@@ -14,7 +19,7 @@ function loadSettings() {
   var s = {};
   try {
     s = JSON.parse(localStorage.getItem("gg_settings") || "{}");
-  } catch {
+  } catch (e) {
     s = {};
   }
   return {
@@ -40,7 +45,7 @@ Pebble.addEventListener("webviewclosed", function (e) {
   var o;
   try {
     o = JSON.parse(decodeURIComponent(e.response));
-  } catch {
+  } catch (err) {
     return;
   }
   localStorage.setItem("gg_settings", JSON.stringify(o));
