@@ -38,8 +38,10 @@ capture the framebuffer and write `argb2222` bytes directly.
   animation, to save battery — until a shake spins it, after which it settles back
   to a standstill in a new orientation. Each model starts in a flattering pose
   (`MODEL_START`, chosen with `scripts/preview-orient.mjs`).
-- **Jumble on shake** (optional). When enabled, every shake also reshuffles the
-  model, render mode and gradient colours.
+- **Jumble on shake** (optional). When enabled, a shake winds the model up to a
+  high spin and, at the peak, swaps in a different model with a new render mode
+  and gradient colours, which then slows back down — the swap is hidden in the
+  motion. The new model is always different from the current one.
 
 ## Settings (phone config page)
 
