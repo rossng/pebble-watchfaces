@@ -1,0 +1,43 @@
+{
+  "name": "glass-clock",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A native Pebble C watchface that raytraces the time as chunky 7-segment glass digits — refraction, reflection and randomised coloured lighting, rendered progressively so each minute develops from grainy noise toward a coherent glassy image.",
+  "keywords": [
+    "pebble-app"
+  ],
+  "author": "Ross Gardiner",
+  "scripts": {
+    "build": "pebble build",
+    "emulator": "pebble install --emulator emery",
+    "dev": "pebble build && pebble install --emulator emery && node ../../tools/emu-tui/bin/emu-tui.js --emulator emery",
+    "reset": "pebble kill && pebble wipe",
+    "deploy:phone": "pebble install --phone \"$PEBBLE_PHONE\"",
+    "deploy:cloud": "pebble install --cloudpebble",
+    "publish:appstore": "pebble build && pebble publish"
+  },
+  "pebble": {
+    "displayName": "Glass Clock",
+    "uuid": "f8c90c76-c0bc-4894-bd32-5e8c9059af59",
+    "sdkVersion": "3",
+    "enableMultiJS": true,
+    "targetPlatforms": [
+      "emery",
+      "gabbro"
+    ],
+    "watchapp": {
+      "watchface": true
+    },
+    "capabilities": [
+      "configurable"
+    ],
+    "messageKeys": [
+      "CEL_MODE",
+      "EDGE_STYLE",
+      "TURN",
+      "PATTERN",
+      "MOOD",
+      "TRANSLUCENCY"
+    ]
+  }
+}
