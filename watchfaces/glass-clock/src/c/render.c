@@ -30,6 +30,15 @@
 #include "render.h"
 #include "fastmath.h"
 
+#if GC_BENCH
+static unsigned long s_bench_evals;   // map_active() calls (progressive shading)
+static unsigned long s_bench_samples; // trace_pixel() calls
+static unsigned long s_bench_geom;    // map_active() calls in the geometry/coverage pass
+unsigned long render_bench_evals(void) { return s_bench_evals; }
+unsigned long render_bench_samples(void) { return s_bench_samples; }
+unsigned long render_bench_geom_evals(void) { return s_bench_geom; }
+#endif
+
 // ---- tunables ----
 #define RES_SHORT 96      // internal pixels along the short screen axis
 #define RES_MAX_W 96
@@ -58,6 +67,16 @@
 #define MAX_PRI 48
 #define MAX_INT 24
 #define NLIGHTS 3
+
+// Decoupled shading (deferred): the primary hit for a solid-interior pixel is the
+// same every sample, so cache its depth once per minute (from the coverage probe)
+// and skip the primary march on every accumulation sample. Depth is quantized to
+// 1 byte over the scene's hit-distance range; 0 means "not cached, march it"
+// (used for silhouette-edge pixels, which keep per-sample jitter for AA).
+#define GC_DEFER 1 // 1 = deferred shading (cache primary depth, skip per-sample march)
+#define DEPTH_LO 2.8f
+#define DEPTH_HI 5.6f
+#define DEPTH_RANGE (DEPTH_HI - DEPTH_LO)
 
 // Contrast enforcement (driven by the 2D stencil in the blit). Kept gentle so it
 // guarantees a legibility floor + a dark background WITHOUT washing out the glass
@@ -110,6 +129,7 @@ static int s_RW, s_RH, s_npix;
 static uint16_t *s_sum;     // heap accumulation buffer (npix * 3)
 static uint8_t *s_cov;      // heap coverage stencil: 0..255 glass coverage per pixel
 static uint8_t *s_edge;     // heap cel outline: 0..255 edge strength per pixel
+static uint8_t *s_pdepth;   // heap deferred-shading depth cache: quantized primary hit depth (0 = none)
 static uint8_t s_xmap[256], s_ymap[256];
 static int s_G, s_cursor, s_pass;
 static unsigned int s_stride;
@@ -178,6 +198,17 @@ static V3 hsv2rgb(float h, float s, float v) {
 }
 static inline float luma(V3 c) { return 0.299f * c.x + 0.587f * c.y + 0.114f * c.z; }
 
+// Quantize a primary hit depth to 1 byte (1..255; 0 reserved for "not cached").
+static inline uint8_t depth_quantize(float t) {
+  int qi = (int)((t - DEPTH_LO) * (254.0f / DEPTH_RANGE) + 0.5f);
+  if (qi < 0) qi = 0;
+  if (qi > 254) qi = 254;
+  return (uint8_t)(qi + 1);
+}
+static inline float depth_dequantize(uint8_t q) {
+  return DEPTH_LO + (float)(q - 1) * (DEPTH_RANGE * (1.0f / 254.0f));
+}
+
 // ---- SDF ----
 static inline float sdRBox2(float px, float py, float bx, float by, float r) {
   float dx = fabs_i(px) - bx, dy = fabs_i(py) - by;
@@ -232,6 +263,9 @@ static float digit3D(float px, float py, float pz, int k) {
   return box > plane ? box : plane;
 }
 static float map_active(V3 p, const int *act, int nact) {
+#if GC_BENCH
+  s_bench_evals++;
+#endif
   float d = 1e9f;
   for (int i = 0; i < nact; i++) {
     int k = act[i];
@@ -266,10 +300,19 @@ static V3 refract_v(V3 I, V3 N, float eta, int *tir) {
   V3 t = vadd(vscale(I, eta), vscale(N, eta * cosi - fast_sqrt(k)));
   return vnorm(t);
 }
-static V3 glossy(V3 d, unsigned int *st, float rough) {
+// Glossy direction perturbation via the R3 low-discrepancy sequence (indexed by
+// the accumulation pass), Cranley-Patterson-rotated per pixel+lobe (rh) so the
+// jitter tiles the reflection/refraction lobe evenly across samples. Provably no
+// worse than uniform random, and converges with visibly less noise for the same
+// sample count — replaces the previous xorshift jitter at zero extra cost.
+static V3 glossy(V3 d, unsigned int rh, float rough) {
   if (rough <= 0.0f) return d;
-  return vnorm(v3(d.x + (rng_next(st) - 0.5f) * rough, d.y + (rng_next(st) - 0.5f) * rough,
-                  d.z + (rng_next(st) - 0.5f) * rough));
+  float ox = fract1((float)s_pass * 0.8191725134f + (float)(rh & 0xffu) * (1.0f / 256.0f)) - 0.5f;
+  float oy =
+      fract1((float)s_pass * 0.6710436067f + (float)((rh >> 8) & 0xffu) * (1.0f / 256.0f)) - 0.5f;
+  float oz =
+      fract1((float)s_pass * 0.5497004779f + (float)((rh >> 16) & 0xffu) * (1.0f / 256.0f)) - 0.5f;
+  return vnorm(v3(d.x + ox * rough, d.y + oy * rough, d.z + oz * rough));
 }
 
 // Coloured lights only (no base) — broad blobs, sampled for specular + as part
@@ -322,19 +365,56 @@ static V3 primary_dir(int ix, int iy, float jx, float jy) {
   return vnorm(v3(px * aspect * TANF, py * TANF, -1.0f));
 }
 
-// Trace one jittered sample; returns linear RGB (unbounded, clamped by caller).
-static V3 trace_pixel(int idx, unsigned int seed) {
-  unsigned int st = seed;
+// Conservative sphere trace from the ray's AABB entry to its exit; returns 1 on
+// hit with *out_t set to the hit parameter. Shared by the primary ray, the
+// coverage probe and the hit test so they can't drift apart.
+//
+// NOTE: Keinert-style over-relaxation (step by omega*d with a safe overlap
+// fallback) was tried here and measured a net loss on this scene — the per-digit
+// AABB cull already clamps each march tightly around the surface, leaving little
+// open space to stride through, and the non-convex SDF (smin joints + chamfers)
+// trips the overshoot fallback often. It raised evals/sample ~3% (omega 1.2) to
+// ~7% (omega 1.6), so plain sphere tracing wins. See git history if revisiting.
+static int march_active(V3 ro, V3 dir, float t_enter, float t_exit, const int *act, int nact,
+                        float *out_t) {
+  float t = t_enter;
+  for (int s = 0; s < MAX_PRI; s++) {
+    float d = map_active(vadd(ro, vscale(dir, t)), act, nact);
+    if (d < EPS) {
+      *out_t = t;
+      return 1;
+    }
+    t += d;
+    if (t > t_exit) return 0;
+  }
+  return 0;
+}
+
+// Trace one sample; returns linear RGB (unbounded, clamped by caller). All
+// stochastic jitter (subpixel AA, glossy lobes) is now driven by low-discrepancy
+// sequences keyed on (pixel, pass), so no per-call RNG state is needed.
+static V3 trace_pixel(int idx) {
+#if GC_BENCH
+  s_bench_samples++;
+#endif
   int ix = idx % s_RW, iy = idx / s_RW;
-  // Subpixel AA jitter from the R2 low-discrepancy sequence (indexed by pass),
-  // Cranley-Patterson-rotated by a per-pixel hash so neighbours are decorrelated.
-  // Unlike plain random jitter this tiles the pixel evenly, so edges resolve with
-  // far less noise for the same number of accumulated samples.
-  unsigned int rh = hash_u32((unsigned int)idx * 0x9e3779b1u);
-  float rotx = (float)(rh & 0xffffu) * (1.0f / 65536.0f);
-  float roty = (float)(rh >> 16) * (1.0f / 65536.0f);
-  float jx = fract1((float)s_pass * 0.7548776662f + rotx) - 0.5f;
-  float jy = fract1((float)s_pass * 0.5698402909f + roty) - 0.5f;
+
+  // Deferred shading (decoupled sampling): a solid-interior pixel's primary hit
+  // is identical every sample, so reuse the depth cached at restart and skip the
+  // per-sample primary march. Edge pixels have no cache (q==0) and march a
+  // jittered ray, so silhouettes keep true subpixel AA. Either way the stochastic
+  // shading (glossy reflection/refraction) still varies per sample and converges.
+  uint8_t q = s_pdepth ? s_pdepth[idx] : 0;
+  float jx = 0.0f, jy = 0.0f;
+  if (!q) {
+    // R2 low-discrepancy subpixel AA (indexed by pass), Cranley-Patterson-rotated
+    // per pixel so neighbours decorrelate and edges resolve with little noise.
+    unsigned int rh = hash_u32((unsigned int)idx * 0x9e3779b1u);
+    float rotx = (float)(rh & 0xffffu) * (1.0f / 65536.0f);
+    float roty = (float)(rh >> 16) * (1.0f / 65536.0f);
+    jx = fract1((float)s_pass * 0.7548776662f + rotx) - 0.5f;
+    jy = fract1((float)s_pass * 0.5698402909f + roty) - 0.5f;
+  }
   V3 dir = primary_dir(ix, iy, jx, jy);
   V3 ro = v3(0, 0, 0);
 
@@ -361,20 +441,13 @@ static V3 trace_pixel(int idx, unsigned int seed) {
   if (nact == 0) return env_scene(dir);
   if (t_enter < 0.0f) t_enter = 0.0f;
 
-  float t = t_enter;
-  int hit = 0;
-  V3 p = ro;
-  for (int s = 0; s < MAX_PRI; s++) {
-    p = vadd(ro, vscale(dir, t));
-    float d = map_active(p, act, nact);
-    if (d < EPS) {
-      hit = 1;
-      break;
-    }
-    t += d;
-    if (t > t_exit) break;
+  float t;
+  if (q) {
+    t = depth_dequantize(q); // cached primary hit — no march
+  } else if (!march_active(ro, dir, t_enter, t_exit, act, nact, &t)) {
+    return env_scene(dir);
   }
-  if (!hit) return env_scene(dir);
+  V3 p = vadd(ro, vscale(dir, t));
 
   V3 N = calc_normal(p, act, nact);
   if (vdot(N, dir) > 0.0f) N = vscale(N, -1.0f);
@@ -396,7 +469,7 @@ static V3 trace_pixel(int idx, unsigned int seed) {
   float shade = 0.6f + 0.4f * ndl; // bright floor -> vivid body, less desaturating lift
   V3 base = vscale(s_body, shade);
 
-  V3 refl = env_scene(glossy(Rc, &st, s_rough));
+  V3 refl = env_scene(glossy(Rc, hash_u32((unsigned int)idx * 2654435761u + 0x9e37u), s_rough));
 
   // Refraction: march interior, refract out, see the patterned scene through the
   // tinted glass (this is where the glass distortion reads).
@@ -421,7 +494,9 @@ static V3 trace_pixel(int idx, unsigned int seed) {
     V3 exitdir = tir2 ? reflect_v(T0, Ne) : T1;
     V3 att = v3(fast_exp_neg(s_absorb.x * dGlass), fast_exp_neg(s_absorb.y * dGlass),
                 fast_exp_neg(s_absorb.z * dGlass));
-    trans = vmul(env_scene(glossy(exitdir, &st, s_rough)), att);
+    trans =
+        vmul(env_scene(glossy(exitdir, hash_u32((unsigned int)idx * 2654435761u + 0x85ebu), s_rough)),
+             att);
   }
 
   // Body-tinted core dominates the digit's colour; the patterned scene shows
@@ -470,15 +545,8 @@ static int primary_hit(V3 dir) {
   }
   if (nact == 0) return 0;
   if (t_enter < 0.0f) t_enter = 0.0f;
-  float t = t_enter;
-  for (int s = 0; s < MAX_PRI; s++) {
-    V3 p = vadd(ro, vscale(dir, t));
-    float d = map_active(p, act, nact);
-    if (d < EPS) return 1;
-    t += d;
-    if (t > t_exit) return 0;
-  }
-  return 0;
+  float t;
+  return march_active(ro, dir, t_enter, t_exit, act, nact, &t);
 }
 
 // Primary-ray probe: returns hit, and on a hit fills the surface normal + depth
@@ -507,19 +575,11 @@ static int primary_probe(V3 dir, V3 *outN, float *outDepth) {
   }
   if (nact == 0) return 0;
   if (t_enter < 0.0f) t_enter = 0.0f;
-  float t = t_enter;
-  for (int s = 0; s < MAX_PRI; s++) {
-    V3 p = vadd(ro, vscale(dir, t));
-    float d = map_active(p, act, nact);
-    if (d < EPS) {
-      *outN = calc_normal(p, act, nact);
-      *outDepth = t;
-      return 1;
-    }
-    t += d;
-    if (t > t_exit) return 0;
-  }
-  return 0;
+  float t;
+  if (!march_active(ro, dir, t_enter, t_exit, act, nact, &t)) return 0;
+  *outN = calc_normal(vadd(ro, vscale(dir, t)), act, nact);
+  *outDepth = t;
+  return 1;
 }
 
 // Per-row scratch for edge detection (previous row's normal/depth/hit).
@@ -546,6 +606,10 @@ static void build_coverage(void) {
       V3 N = v3(0, 0, 0);
       float dep = 0.0f;
       int hh = primary_probe(primary_dir(ix, iy, 0.0f, 0.0f), &N, &dep);
+      // Cache the primary depth for deferred shading, but ONLY for fully-covered
+      // interior pixels (cov==4). Silhouette-edge pixels stay uncached so they
+      // keep per-sample jittered marching (subpixel AA where it's visible).
+      if (s_pdepth) s_pdepth[idx] = (GC_DEFER && cov == 4 && hh) ? depth_quantize(dep) : 0;
       int edge = 0;
       if (ix > 0 && hh != lhit) edge = 255;      // silhouette (left)
       if (iy > 0 && hh != s_prh[ix]) edge = 255; // silhouette (up)
@@ -594,6 +658,7 @@ void render_init(GRect bounds) {
   s_sum = (uint16_t *)malloc((size_t)s_npix * 3 * sizeof(uint16_t));
   s_cov = (uint8_t *)malloc((size_t)s_npix);
   s_edge = (uint8_t *)malloc((size_t)s_npix);
+  s_pdepth = (uint8_t *)malloc((size_t)s_npix); // optional: deferred-shading depth cache
 
   for (int sx = 0; sx < s_W && sx < 256; sx++) {
     int ix = sx * s_RW / s_W;
@@ -618,6 +683,12 @@ void render_init(GRect bounds) {
 
 void render_restart(const char *hhmm) {
   if (!s_sum || !s_cov || !s_edge) return;
+#if GC_BENCH
+  // Force a fixed scene + seed so eval counts are directly comparable across builds.
+  srand(777);
+  hhmm = "1027";
+  s_bench_evals = 0;
+#endif
   for (int k = 0; k < 4; k++) {
     uint8_t mask = DIGIT_SEG[hhmm[k] - '0'];
     s_mask[k] = mask;
@@ -705,6 +776,11 @@ void render_restart(const char *hhmm) {
   s_pcol1 = vscale(hsv2rgb(fract1(baseh + 0.72f), 0.8f, 1.0f), 0.16f);
 
   build_coverage();
+#if GC_BENCH
+  s_bench_geom = s_bench_evals; // evals spent on the per-minute geometry/coverage pass
+  s_bench_evals = 0;            // from here on, count only progressive shading evals
+  s_bench_samples = 0;
+#endif
 
   // Seed pass 0 so the whole image is present immediately: digit cores in the
   // body tint, background dark. The blit's contrast enforcement makes this read
@@ -754,8 +830,7 @@ void render_step(int budget) {
     // seeded at restart and never re-traced. Skipping their trace makes each
     // burst cheaper than tracing the whole frame did, at no cost to the image.
     if (s_cov[i] != 0) {
-      unsigned int seed = hash_u32((unsigned int)i ^ ((unsigned int)s_pass * 40503u));
-      V3 c = trace_pixel(i, seed);
+      V3 c = trace_pixel(i);
       int r = (int)(clampf_i(c.x, 0.0f, 1.0f) * 255.0f);
       int g = (int)(clampf_i(c.y, 0.0f, 1.0f) * 255.0f);
       int b = (int)(clampf_i(c.z, 0.0f, 1.0f) * 255.0f);

@@ -44,10 +44,25 @@ static void apply_options(void) {
                      s_settings.mood, s_settings.translucency);
 }
 
+#if GC_BENCH
+static int s_bench_logged;
+#endif
+
 static void anim_cb(void *ctx) {
   s_timer = NULL;
   render_step(N_PIX_PER_TICK);
   if ((++s_ticks % BLIT_EVERY) == 0) layer_mark_dirty(s_layer);
+#if GC_BENCH
+  (void)s_bench_logged;
+  if ((s_ticks % 80) == 0 && render_passes() >= 3) { // periodic; ratio stable after a few passes
+    unsigned long sm = render_bench_samples(), ev = render_bench_evals();
+    // evals/sample ×100 (integer, avoids float in the log).
+    unsigned long eps100 = sm ? (ev * 100UL) / sm : 0;
+    APP_LOG(APP_LOG_LEVEL_INFO,
+            "BENCH p%d ticks=%d geom_evals=%lu shade_evals=%lu samples=%lu evals/sample(x100)=%lu heap=%d",
+            render_passes(), s_ticks, render_bench_geom_evals(), ev, sm, eps100, (int)heap_bytes_free());
+  }
+#endif
   if (render_passes() < MAX_PASSES) {
     s_timer = app_timer_register(FRAME_MS, anim_cb, NULL);
   }
@@ -69,6 +84,9 @@ static void tick_handler(struct tm *tick_time, TimeUnits units) {
   set_time(tick_time);
   render_restart(s_time); // new minute: rebuild digits, fresh mood/pattern/angle, reseed
   s_ticks = 0;
+#if GC_BENCH
+  s_bench_logged = 0;
+#endif
   ensure_animating();
   layer_mark_dirty(s_layer);
 }
