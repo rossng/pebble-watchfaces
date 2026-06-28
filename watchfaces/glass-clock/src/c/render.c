@@ -151,6 +151,60 @@ static const Seg SEG[7] = {
 };
 static const uint8_t DIGIT_SEG[10] = {63, 6, 91, 79, 102, 109, 125, 7, 127, 111};
 
+// ---- bold "space-filling" glyph font (MODEL_QUARTER) ----
+// A heavier, non-segmented numeral set in the spirit of Pebble's Just Big /
+// Revolution faces: each digit is drawn as a few THICK rounded strokes (capsules)
+// that smin-merge into a solid bold shape designed to fill its cell, rather than
+// the thin 7-segment bars. Coordinates live in the same local cell as the
+// 7-segment digits (|u|<~0.47, |v|<~0.87) so the AABB cull and extrusion are
+// unchanged. Strokes are listed as endpoint pairs and unioned at runtime.
+#define GLYPH_T 0.185f                  // stroke half-thickness (bold)
+#define GLYPH_XR 0.285f                 // vertical-stroke offset from centre
+#define GLYPH_YT 0.685f                 // top/bottom stroke offset from centre
+#define GLYPH_HW (GLYPH_XR + GLYPH_T)   // glyph half-width  (~0.47)
+#define GLYPH_HH (GLYPH_YT + GLYPH_T)   // glyph half-height (~0.87)
+#define GLYPH_K 0.07f                   // smin join radius (liquid-glass merge)
+typedef struct {
+  float ax, ay, bx, by;
+} Cap;
+// xL=-0.285 xR=0.285 yT=0.685 yM=0 yB=-0.685
+static const Cap GLYPH_CAP[] = {
+    // 0: bold rounded rectangle outline
+    {-0.285f, 0.685f, 0.285f, 0.685f}, {-0.285f, -0.685f, 0.285f, -0.685f},
+    {-0.285f, 0.685f, -0.285f, -0.685f}, {0.285f, 0.685f, 0.285f, -0.685f},
+    // 1: centred spine + top flag + foot
+    {0.04f, 0.685f, 0.04f, -0.685f}, {-0.20f, 0.40f, 0.04f, 0.685f},
+    {-0.255f, -0.685f, 0.30f, -0.685f},
+    // 2: top, upper-right, diagonal, bottom
+    {-0.285f, 0.685f, 0.285f, 0.685f}, {0.285f, 0.685f, 0.285f, 0.0f},
+    {0.285f, 0.0f, -0.285f, -0.685f}, {-0.285f, -0.685f, 0.285f, -0.685f},
+    // 3: top, mid, bottom, right spine
+    {-0.285f, 0.685f, 0.285f, 0.685f}, {-0.205f, 0.0f, 0.285f, 0.0f},
+    {-0.285f, -0.685f, 0.285f, -0.685f}, {0.285f, 0.685f, 0.285f, -0.685f},
+    // 4: upper-left, mid, right spine
+    {-0.285f, 0.685f, -0.285f, 0.0f}, {-0.285f, 0.0f, 0.285f, 0.0f},
+    {0.285f, 0.685f, 0.285f, -0.685f},
+    // 5: top, upper-left, mid, lower-right, bottom
+    {-0.285f, 0.685f, 0.285f, 0.685f}, {-0.285f, 0.685f, -0.285f, 0.0f},
+    {-0.285f, 0.0f, 0.285f, 0.0f}, {0.285f, 0.0f, 0.285f, -0.685f},
+    {-0.285f, -0.685f, 0.285f, -0.685f},
+    // 6: top, left spine, bottom, lower-right, mid
+    {-0.285f, 0.685f, 0.205f, 0.685f}, {-0.285f, 0.685f, -0.285f, -0.685f},
+    {-0.285f, -0.685f, 0.285f, -0.685f}, {0.285f, -0.685f, 0.285f, 0.0f},
+    {-0.285f, 0.0f, 0.285f, 0.0f},
+    // 7: top, long diagonal
+    {-0.285f, 0.685f, 0.285f, 0.685f}, {0.285f, 0.685f, -0.06f, -0.685f},
+    // 8: top, mid, bottom, both spines
+    {-0.285f, 0.685f, 0.285f, 0.685f}, {-0.285f, 0.0f, 0.285f, 0.0f},
+    {-0.285f, -0.685f, 0.285f, -0.685f}, {-0.285f, 0.685f, -0.285f, -0.685f},
+    {0.285f, 0.685f, 0.285f, -0.685f},
+    // 9: top, upper-left, mid, right spine, bottom
+    {-0.285f, 0.685f, 0.285f, 0.685f}, {-0.285f, 0.685f, -0.285f, 0.0f},
+    {-0.285f, 0.0f, 0.285f, 0.0f}, {0.285f, 0.685f, 0.285f, -0.685f},
+    {-0.205f, -0.685f, 0.285f, -0.685f},
+};
+static const uint8_t GLYPH_OFF[11] = {0, 4, 7, 11, 15, 18, 23, 28, 30, 35, 40};
+
 static const uint8_t BAYER[4][4] = {
     {0, 8, 2, 10}, {12, 4, 14, 6}, {3, 11, 1, 9}, {15, 7, 13, 5}};
 
@@ -168,6 +222,7 @@ static unsigned int s_stride;
 static uint8_t s_mask[4];
 static uint8_t s_seg[4][7]; // lit segment indices per digit (precomputed at restart)
 static uint8_t s_nseg[4];   // count of lit segments per digit
+static uint8_t s_digit[4];  // digit value 0..9 per cell (for the bold glyph font)
 static V3 s_center[4];
 static V3 s_lo[4], s_hi[4];
 static float s_rc[4], s_rs[4]; // per-digit Y-rotation (cos, sin) — slight 3D turn
@@ -202,7 +257,19 @@ static int s_opt_turn = 1;     // TURN_OBLIQUE
 static int s_opt_pattern = 1;  // pattern on
 static int s_opt_mood = 0;     // MOOD_SURPRISE
 static int s_opt_trans = 1;    // TRANS_MEDIUM
+static int s_opt_lights = 0;   // LIGHTS_SURROUND
+static int s_opt_model = 0;    // MODEL_CLASSIC
+static int s_cam_ortho = 0;    // 0 = perspective (pinhole), 1 = orthographic
+static float s_vhw, s_vhh;     // orthographic view half-extents at the digit plane
 static float s_transw = 0.34f; // refraction weight (set from translucency)
+
+// Digit layout/scale for the active number model (set per minute in
+// render_restart). Classic = the original compact 2x2; Quarter scales each digit
+// up and spreads the centres to the quadrant centres so a number fills ~a quarter
+// of the screen. s_dinv = 1/s_dscale, applied in the hot SDF loop (uniform scale,
+// so the SDF stays a valid Euclidean distance).
+static float s_dscale = 1.0f, s_dinv = 1.0f;
+static float s_colx = COL_X, s_rowy = ROW_Y;
 
 // ---- helpers ----
 static float frand(void) { return (float)rand() / (float)RAND_MAX; }
@@ -215,6 +282,22 @@ static V3 rand_dir(void) {
     l = vdot(d, d);
   } while (l < 0.05f);
   return vscale(d, fast_rsqrt(l));
+}
+// A light sitting BEHIND the glass, facing the camera. The environment is
+// directional (env(dir)), and a refraction ray that exits the back of the glass
+// travels roughly -z (away from the camera, into the scene behind), so a light
+// the viewer sees glowing through the glass lives at a direction with a strong
+// -z component and only a small off-axis spread ("almost toward the camera").
+// Reflections point back toward +z, so these never show as front specular — they
+// only bloom through the refracted body, which is the effect we're after.
+static V3 backlight_dir(void) {
+  float ang = frand() * 6.2831853f;
+  float r = 0.12f + frand() * 0.45f; // off-axis spread (~7deg..27deg)
+  V3 d = v3(r * fast_cos(ang), r * fast_sin(ang), -1.0f);
+  return vnorm(d);
+}
+static V3 light_dir(void) {
+  return (s_opt_lights == 1) ? backlight_dir() : rand_dir(); // 1 = LIGHTS_BACKLIT
 }
 static V3 hsv2rgb(float h, float s, float v) {
   h = fract1(h);
@@ -279,8 +362,28 @@ static float digit2D(float u, float v, int k) {
   }
   return d;
 }
+// 2D distance to a rounded line segment (capsule) of radius GLYPH_T — the bold
+// font's stroke primitive. True Euclidean distance, so it sphere-traces cleanly.
+static float sdCap2(float px, float py, const Cap *c) {
+  float pax = px - c->ax, pay = py - c->ay;
+  float bax = c->bx - c->ax, bay = c->by - c->ay;
+  float h = (pax * bax + pay * bay) / (bax * bax + bay * bay);
+  h = clampf_i(h, 0.0f, 1.0f);
+  float dx = pax - bax * h, dy = pay - bay * h;
+  return fast_sqrt(dx * dx + dy * dy) - GLYPH_T;
+}
+// Bold space-filling numeral: smin-union the digit's thick strokes.
+static float glyph2D(float u, float v, int d) {
+  int lo = GLYPH_OFF[d], hi = GLYPH_OFF[d + 1];
+  float r = 1e9f;
+  for (int j = lo; j < hi; j++) {
+    float dd = sdCap2(u, v, &GLYPH_CAP[j]);
+    r = smin(r, dd, GLYPH_K);
+  }
+  return r;
+}
 static float digit3D(float px, float py, float pz, int k) {
-  float d2 = digit2D(px, py, k);
+  float d2 = (s_opt_model == 1) ? glyph2D(px, py, s_digit[k]) : digit2D(px, py, k);
   float wz = fabs_i(pz) - HZ;
   float box = d2 > wz ? d2 : wz; // sharp extruded box
   if (s_opt_edge == 0) return box;
@@ -304,10 +407,11 @@ static float map_active(V3 p, const int *act, int nact) {
   for (int i = 0; i < nact; i++) {
     int k = act[i];
     float lx = p.x - s_center[k].x, ly = p.y - s_center[k].y, lz = p.z - s_center[k].z;
-    // rotate world->digit-local by -angle around Y
-    float ux = s_rc[k] * lx - s_rs[k] * lz;
-    float uz = s_rs[k] * lx + s_rc[k] * lz;
-    float dd = digit3D(ux, ly, uz, k);
+    // rotate world->digit-local by -angle around Y, then divide into the model's
+    // local unit space (uniform scale: sdf_scaled(p) = sdf(p/s)*s).
+    float ux = (s_rc[k] * lx - s_rs[k] * lz) * s_dinv;
+    float uz = (s_rs[k] * lx + s_rc[k] * lz) * s_dinv;
+    float dd = digit3D(ux, ly * s_dinv, uz, k) * s_dscale;
     if (dd < d) d = dd;
   }
   return d;
@@ -407,6 +511,23 @@ static V3 primary_dir(int ix, int iy, float jx, float jy) {
   return vnorm(v3(px * aspect * TANF, py * TANF, -1.0f));
 }
 
+// The camera ray for pixel (ix,iy). Perspective is a pinhole at the origin (all
+// rays share ro=0, dir varies). Orthographic spreads the ray ORIGIN across the
+// image plane (z=0) and fires every ray straight down -z, so parallel projection
+// — no foreshortening, the flat "technical" look. The ortho view half-extents
+// (s_vhw/s_vhh) match the perspective framing at the digit plane.
+static void cam_ray(int ix, int iy, float jx, float jy, V3 *ro, V3 *dir) {
+  if (s_cam_ortho) {
+    float px = (((float)ix + 0.5f + jx) / (float)s_RW) * 2.0f - 1.0f;
+    float py = 1.0f - (((float)iy + 0.5f + jy) / (float)s_RH) * 2.0f;
+    *ro = v3(px * s_vhw, py * s_vhh, 0.0f);
+    *dir = v3(0.0f, 0.0f, -1.0f);
+  } else {
+    *ro = v3(0.0f, 0.0f, 0.0f);
+    *dir = primary_dir(ix, iy, jx, jy);
+  }
+}
+
 // Reconstruct the view-space hit position of pixel (ix,iy) from its LINEAR depth
 // zc (= |hit.z|, what the deferred cache stores). Pure multiplies — no normalize.
 // This is why the cache stores linear depth, not ray distance: neighbour
@@ -414,6 +535,7 @@ static V3 primary_dir(int ix, int iy, float jx, float jy) {
 static V3 view_pos(int ix, int iy, float zc) {
   float px = (((float)ix + 0.5f) / (float)s_RW) * 2.0f - 1.0f;
   float py = 1.0f - (((float)iy + 0.5f) / (float)s_RH) * 2.0f;
+  if (s_cam_ortho) return v3(px * s_vhw, py * s_vhh, -zc); // parallel: x,y independent of depth
   float aspect = (float)s_RW / (float)s_RH;
   return v3(px * aspect * TANF * zc, py * TANF * zc, -zc);
 }
@@ -466,6 +588,37 @@ static int normal_from_depth(int ix, int iy, V3 *outN) {
 }
 #endif
 
+// Ray/AABB cull against the 4 per-digit boxes. Fills act[] with the indices of
+// the boxes the ray pierces and the union entry/exit params, returns the count.
+// Offsetting by the ray origin makes it correct for both the pinhole camera
+// (ro=0) and the orthographic one (ro spread across the image plane); the 1e-6
+// clamp keeps it robust to zero direction components (ortho fires dir=(0,0,-1)).
+static int cull_digits(V3 ro, V3 dir, int *act, float *t_enter, float *t_exit) {
+  V3 inv = v3(1.0f / (fabs_i(dir.x) < 1e-6f ? (dir.x < 0 ? -1e-6f : 1e-6f) : dir.x),
+              1.0f / (fabs_i(dir.y) < 1e-6f ? (dir.y < 0 ? -1e-6f : 1e-6f) : dir.y),
+              1.0f / (fabs_i(dir.z) < 1e-6f ? (dir.z < 0 ? -1e-6f : 1e-6f) : dir.z));
+  int nact = 0;
+  float te = 1e9f, tx = -1e9f;
+  for (int k = 0; k < 4; k++) {
+    float x1 = (s_lo[k].x - ro.x) * inv.x, x2 = (s_hi[k].x - ro.x) * inv.x;
+    float tmn = minf_i(x1, x2), tmx = maxf_i(x1, x2);
+    float y1 = (s_lo[k].y - ro.y) * inv.y, y2 = (s_hi[k].y - ro.y) * inv.y;
+    tmn = maxf_i(tmn, minf_i(y1, y2));
+    tmx = minf_i(tmx, maxf_i(y1, y2));
+    float z1 = (s_lo[k].z - ro.z) * inv.z, z2 = (s_hi[k].z - ro.z) * inv.z;
+    tmn = maxf_i(tmn, minf_i(z1, z2));
+    tmx = minf_i(tmx, maxf_i(z1, z2));
+    if (tmx >= maxf_i(tmn, 0.0f)) {
+      act[nact++] = k;
+      if (tmn < te) te = tmn;
+      if (tmx > tx) tx = tmx;
+    }
+  }
+  *t_enter = te;
+  *t_exit = tx;
+  return nact;
+}
+
 // Trace one sample; returns linear RGB (unbounded, clamped by caller). All
 // stochastic jitter (subpixel AA, glossy lobes) is now driven by low-discrepancy
 // sequences keyed on (pixel, pass), so no per-call RNG state is needed.
@@ -491,29 +644,12 @@ static V3 trace_pixel(int idx) {
     jx = fract1((float)s_pass * 0.7548776662f + rotx) - 0.5f;
     jy = fract1((float)s_pass * 0.5698402909f + roty) - 0.5f;
   }
-  V3 dir = primary_dir(ix, iy, jx, jy);
-  V3 ro = v3(0, 0, 0);
+  V3 ro, dir;
+  cam_ray(ix, iy, jx, jy, &ro, &dir);
 
-  V3 inv = v3(1.0f / (fabs_i(dir.x) < 1e-6f ? (dir.x < 0 ? -1e-6f : 1e-6f) : dir.x),
-              1.0f / (fabs_i(dir.y) < 1e-6f ? (dir.y < 0 ? -1e-6f : 1e-6f) : dir.y),
-              1.0f / (fabs_i(dir.z) < 1e-6f ? (dir.z < 0 ? -1e-6f : 1e-6f) : dir.z));
-  int act[4], nact = 0;
-  float t_enter = 1e9f, t_exit = -1e9f;
-  for (int k = 0; k < 4; k++) {
-    float x1 = s_lo[k].x * inv.x, x2 = s_hi[k].x * inv.x;
-    float tmn = minf_i(x1, x2), tmx = maxf_i(x1, x2);
-    float y1 = s_lo[k].y * inv.y, y2 = s_hi[k].y * inv.y;
-    tmn = maxf_i(tmn, minf_i(y1, y2));
-    tmx = minf_i(tmx, maxf_i(y1, y2));
-    float z1 = s_lo[k].z * inv.z, z2 = s_hi[k].z * inv.z;
-    tmn = maxf_i(tmn, minf_i(z1, z2));
-    tmx = minf_i(tmx, maxf_i(z1, z2));
-    if (tmx >= maxf_i(tmn, 0.0f)) {
-      act[nact++] = k;
-      if (tmn < t_enter) t_enter = tmn;
-      if (tmx > t_exit) t_exit = tmx;
-    }
-  }
+  int act[4];
+  float t_enter, t_exit;
+  int nact = cull_digits(ro, dir, act, &t_enter, &t_exit);
   if (nact == 0) return env_scene(dir);
   if (t_enter < 0.0f) t_enter = 0.0f;
 
@@ -614,28 +750,10 @@ static V3 trace_pixel(int idx) {
 
 // Does a primary ray hit the glass? (cull + sphere-trace, no shading.) Used to
 // build the coverage stencil against the actual rotated 3D geometry.
-static int primary_hit(V3 dir) {
-  V3 ro = v3(0, 0, 0);
-  V3 inv = v3(1.0f / (fabs_i(dir.x) < 1e-6f ? (dir.x < 0 ? -1e-6f : 1e-6f) : dir.x),
-              1.0f / (fabs_i(dir.y) < 1e-6f ? (dir.y < 0 ? -1e-6f : 1e-6f) : dir.y),
-              1.0f / (fabs_i(dir.z) < 1e-6f ? (dir.z < 0 ? -1e-6f : 1e-6f) : dir.z));
-  int act[4], nact = 0;
-  float t_enter = 1e9f, t_exit = -1e9f;
-  for (int k = 0; k < 4; k++) {
-    float x1 = s_lo[k].x * inv.x, x2 = s_hi[k].x * inv.x;
-    float tmn = minf_i(x1, x2), tmx = maxf_i(x1, x2);
-    float y1 = s_lo[k].y * inv.y, y2 = s_hi[k].y * inv.y;
-    tmn = maxf_i(tmn, minf_i(y1, y2));
-    tmx = minf_i(tmx, maxf_i(y1, y2));
-    float z1 = s_lo[k].z * inv.z, z2 = s_hi[k].z * inv.z;
-    tmn = maxf_i(tmn, minf_i(z1, z2));
-    tmx = minf_i(tmx, maxf_i(z1, z2));
-    if (tmx >= maxf_i(tmn, 0.0f)) {
-      act[nact++] = k;
-      if (tmn < t_enter) t_enter = tmn;
-      if (tmx > t_exit) t_exit = tmx;
-    }
-  }
+static int primary_hit(V3 ro, V3 dir) {
+  int act[4];
+  float t_enter, t_exit;
+  int nact = cull_digits(ro, dir, act, &t_enter, &t_exit);
   if (nact == 0) return 0;
   if (t_enter < 0.0f) t_enter = 0.0f;
   float t;
@@ -644,28 +762,10 @@ static int primary_hit(V3 dir) {
 
 // Primary-ray probe: returns hit, and on a hit fills the surface normal + depth
 // (used for cel edge detection).
-static int primary_probe(V3 dir, V3 *outN, float *outDepth) {
-  V3 ro = v3(0, 0, 0);
-  V3 inv = v3(1.0f / (fabs_i(dir.x) < 1e-6f ? (dir.x < 0 ? -1e-6f : 1e-6f) : dir.x),
-              1.0f / (fabs_i(dir.y) < 1e-6f ? (dir.y < 0 ? -1e-6f : 1e-6f) : dir.y),
-              1.0f / (fabs_i(dir.z) < 1e-6f ? (dir.z < 0 ? -1e-6f : 1e-6f) : dir.z));
-  int act[4], nact = 0;
-  float t_enter = 1e9f, t_exit = -1e9f;
-  for (int k = 0; k < 4; k++) {
-    float x1 = s_lo[k].x * inv.x, x2 = s_hi[k].x * inv.x;
-    float tmn = minf_i(x1, x2), tmx = maxf_i(x1, x2);
-    float y1 = s_lo[k].y * inv.y, y2 = s_hi[k].y * inv.y;
-    tmn = maxf_i(tmn, minf_i(y1, y2));
-    tmx = minf_i(tmx, maxf_i(y1, y2));
-    float z1 = s_lo[k].z * inv.z, z2 = s_hi[k].z * inv.z;
-    tmn = maxf_i(tmn, minf_i(z1, z2));
-    tmx = minf_i(tmx, maxf_i(z1, z2));
-    if (tmx >= maxf_i(tmn, 0.0f)) {
-      act[nact++] = k;
-      if (tmn < t_enter) t_enter = tmn;
-      if (tmx > t_exit) t_exit = tmx;
-    }
-  }
+static int primary_probe(V3 ro, V3 dir, V3 *outN, float *outDepth) {
+  int act[4];
+  float t_enter, t_exit;
+  int nact = cull_digits(ro, dir, act, &t_enter, &t_exit);
   if (nact == 0) return 0;
   if (t_enter < 0.0f) t_enter = 0.0f;
   float t;
@@ -690,16 +790,22 @@ static void build_coverage(void) {
     for (int ix = 0; ix < s_RW; ix++) {
       int idx = iy * s_RW + ix;
       int cov = 0;
-      cov += primary_hit(primary_dir(ix, iy, -0.25f, -0.25f));
-      cov += primary_hit(primary_dir(ix, iy, 0.25f, -0.25f));
-      cov += primary_hit(primary_dir(ix, iy, -0.25f, 0.25f));
-      cov += primary_hit(primary_dir(ix, iy, 0.25f, 0.25f));
+      V3 ro4, dir4;
+      cam_ray(ix, iy, -0.25f, -0.25f, &ro4, &dir4);
+      cov += primary_hit(ro4, dir4);
+      cam_ray(ix, iy, 0.25f, -0.25f, &ro4, &dir4);
+      cov += primary_hit(ro4, dir4);
+      cam_ray(ix, iy, -0.25f, 0.25f, &ro4, &dir4);
+      cov += primary_hit(ro4, dir4);
+      cam_ray(ix, iy, 0.25f, 0.25f, &ro4, &dir4);
+      cov += primary_hit(ro4, dir4);
       s_cov[idx] = (uint8_t)(cov * 63); // 0,63,126,189,252
 
       V3 N = v3(0, 0, 0);
       float dep = 0.0f;
-      V3 cdir = primary_dir(ix, iy, 0.0f, 0.0f);
-      int hh = primary_probe(cdir, &N, &dep);
+      V3 cro, cdir;
+      cam_ray(ix, iy, 0.0f, 0.0f, &cro, &cdir);
+      int hh = primary_probe(cro, cdir, &N, &dep);
       // Cache LINEAR depth (|hit.z| = ray-distance * |dir.z|) for deferred shading,
       // but ONLY for fully-covered interior pixels (cov==4). Silhouette-edge pixels
       // stay uncached so they keep per-sample jittered marching (subpixel AA).
@@ -787,7 +893,9 @@ void render_restart(const char *hhmm) {
   s_bench_env = 0;
 #endif
   for (int k = 0; k < 4; k++) {
-    uint8_t mask = DIGIT_SEG[hhmm[k] - '0'];
+    int dv = hhmm[k] - '0';
+    s_digit[k] = (uint8_t)dv; // for the bold glyph font
+    uint8_t mask = DIGIT_SEG[dv];
     s_mask[k] = mask;
     // Precompute the lit-segment index list so digit2D iterates only lit
     // segments (and drops the per-segment bit test) in the hot SDF loop.
@@ -796,19 +904,44 @@ void render_restart(const char *hhmm) {
       if (mask & (1 << s)) s_seg[k][n++] = (uint8_t)s;
     s_nseg[k] = (uint8_t)n;
   }
-  s_center[0] = v3(-COL_X, ROW_Y, -CAM_DIST);
-  s_center[1] = v3(COL_X, ROW_Y, -CAM_DIST);
-  s_center[2] = v3(-COL_X, -ROW_Y, -CAM_DIST);
-  s_center[3] = v3(COL_X, -ROW_Y, -CAM_DIST);
+  // Visible half-extents at the digit plane (z = -CAM_DIST): the same framing the
+  // pinhole camera produces, reused for quadrant placement and as the orthographic
+  // camera's view size so perspective/ortho frame the digits identically.
+  s_vhh = CAM_DIST * TANF;
+  s_vhw = s_vhh * ((float)s_RW / (float)s_RH);
+
+  // Number model: pick the digit scale + column/row offsets. Classic keeps the
+  // original compact 2x2. Quarter scales each digit up and pushes the centres out
+  // to the quadrant centres so a single number fills ~a quarter of the display.
+  if (s_opt_model == 1) {
+    s_rowy = s_vhh * 0.5f;
+    s_colx = s_vhw * 0.5f;
+    // Scale the bold glyph so it nearly fills its quadrant's height (small gap),
+    // measured from the glyph's own half-height so big thick numerals fill the
+    // quarter rather than leaving slack.
+    s_dscale = (s_vhh * 0.5f * 0.95f) / GLYPH_HH;
+  } else {
+    s_colx = COL_X;
+    s_rowy = ROW_Y;
+    s_dscale = 1.0f;
+  }
+  s_dinv = 1.0f / s_dscale;
+  s_center[0] = v3(-s_colx, s_rowy, -CAM_DIST);
+  s_center[1] = v3(s_colx, s_rowy, -CAM_DIST);
+  s_center[2] = v3(-s_colx, -s_rowy, -CAM_DIST);
+  s_center[3] = v3(s_colx, -s_rowy, -CAM_DIST);
   // View the whole clock obliquely: turn every digit the SAME way around the up
   // axis by a sizeable angle (28-40deg, random sign per minute) so the side walls
   // and facets show and the thickness is obvious. A small per-digit jitter keeps
-  // it lively without looking random.
-  s_obl = (s_opt_turn == 0) ? 0.0f
-                            : (0.35f + frand() * 0.14f) * (frand() < 0.5f ? -1.0f : 1.0f);
-  float hwx = DIGIT_HW + 0.02f, hzz = HZ + 0.02f, ey = DIGIT_HH + 0.02f;
+  // it lively without looking random. The Quarter model is forced flat-on
+  // regardless of the turn setting — rotation would break the space-filling look
+  // (and turned giant digits would collide).
+  int turn = (s_opt_turn != 0) && (s_opt_model != 1);
+  s_obl = !turn ? 0.0f : (0.35f + frand() * 0.14f) * (frand() < 0.5f ? -1.0f : 1.0f);
+  float hwx = DIGIT_HW * s_dscale + 0.02f, hzz = HZ * s_dscale + 0.02f,
+        ey = DIGIT_HH * s_dscale + 0.02f;
   for (int k = 0; k < 4; k++) {
-    float ang = (s_opt_turn == 0) ? 0.0f : (s_obl + frand2() * 0.07f); // ±4deg jitter
+    float ang = !turn ? 0.0f : (s_obl + frand2() * 0.07f); // ±4deg jitter
     s_rc[k] = fast_cos(ang);
     s_rs[k] = fast_sin(ang);
     float ac = fabs_i(s_rc[k]), as = fabs_i(s_rs[k]);
@@ -832,7 +965,7 @@ void render_restart(const char *hhmm) {
     for (int i = 0; i < NLIGHTS; i++) {
       float hue = fract1(baseh + (float)i * 0.34f + frand2() * 0.05f);
       s_lcol[i] = vscale(hsv2rgb(hue, 0.95f, 1.0f), 1.5f);
-      s_ldir[i] = rand_dir();
+      s_ldir[i] = light_dir();
     }
     s_body = hsv2rgb(fract1(baseh + 0.12f), 0.85f, 1.0f);
     s_absorb = vscale(vsub(v3(1, 1, 1), s_body), 2.0f);
@@ -844,10 +977,19 @@ void render_restart(const char *hhmm) {
     for (int i = 0; i < NLIGHTS; i++) {
       float hue = fract1(baseh + 0.5f + (float)i * 0.18f + frand2() * 0.08f);
       s_lcol[i] = vscale(hsv2rgb(hue, 0.75f, 1.0f), 1.1f);
-      s_ldir[i] = rand_dir();
+      s_ldir[i] = light_dir();
     }
     s_body = hsv2rgb(fract1(baseh + 0.45f), 0.55f, 1.0f);
     s_absorb = vscale(vsub(v3(1, 1, 1), s_body), 1.4f);
+  }
+
+  // Backlit lights: the blobs are seen through the refracted body rather than as
+  // front specular, so push them brighter and a touch tighter to read as distinct
+  // glowing orbs behind the glass, and lift the refraction weight a little so the
+  // glow actually carries through even at lower translucency.
+  if (s_opt_lights == 1) { // LIGHTS_BACKLIT
+    for (int i = 0; i < NLIGHTS; i++) s_lcol[i] = vscale(s_lcol[i], 1.7f);
+    if (s_ltight < 4) s_ltight++;
   }
 
   // Translucency: how much of the scene shows through the glass, and how strongly
@@ -861,12 +1003,15 @@ void render_restart(const char *hhmm) {
   } else {
     s_transw = 0.34f;
   }
+  if (s_opt_lights == 1 && s_transw < 0.42f) s_transw = 0.42f; // ensure backlights bleed through
 
 #if GC_THIN_REFRACT
-  // Thin-slab path length is constant, so the Beer-Lambert attenuation is too —
-  // precompute it once here instead of 3 exp() per sample.
-  s_thin_att = v3(fast_exp_neg(s_absorb.x * THIN_GLASS_LEN), fast_exp_neg(s_absorb.y * THIN_GLASS_LEN),
-                  fast_exp_neg(s_absorb.z * THIN_GLASS_LEN));
+  // Thin-slab path length is constant per minute (it scales with the digit model),
+  // so the Beer-Lambert attenuation is too — precompute it once here instead of 3
+  // exp() per sample.
+  float slab = THIN_GLASS_LEN * s_dscale;
+  s_thin_att = v3(fast_exp_neg(s_absorb.x * slab), fast_exp_neg(s_absorb.y * slab),
+                  fast_exp_neg(s_absorb.z * slab));
 #endif
 
   // Randomised environment pattern for the glass to refract/reflect.
@@ -898,7 +1043,9 @@ void render_restart(const char *hhmm) {
       c = s_body;
     } else {
       int ix = i % s_RW, iy = i / s_RW;
-      c = env_scene(primary_dir(ix, iy, 0.0f, 0.0f));
+      V3 sro, sdir;
+      cam_ray(ix, iy, 0.0f, 0.0f, &sro, &sdir);
+      c = env_scene(sdir);
     }
     s_sum[i * 3 + 0] = (uint16_t)(clampf_i(c.x, 0.0f, 1.0f) * 255.0f);
     s_sum[i * 3 + 1] = (uint16_t)(clampf_i(c.y, 0.0f, 1.0f) * 255.0f);
@@ -909,13 +1056,17 @@ void render_restart(const char *hhmm) {
   s_pass = 1;
 }
 
-void render_set_options(int cel, int edge, int turn, int pattern, int mood, int translucency) {
+void render_set_options(int cel, int edge, int turn, int pattern, int mood, int translucency,
+                        int lights, int model, int camera) {
   s_opt_cel = cel;
   s_opt_edge = edge;
   s_opt_turn = turn;
   s_opt_pattern = pattern;
   s_opt_mood = mood;
   s_opt_trans = translucency;
+  s_opt_lights = lights;
+  s_opt_model = model;
+  s_cam_ortho = (camera == 1); // CAM_ORTHO
 }
 
 int render_passes(void) { return s_G; }
@@ -967,7 +1118,14 @@ void render_blit(GContext *ctx, GRect bounds) {
   if (!s_sum || !s_cov || !s_edge) return;
   GBitmap *fb = graphics_capture_frame_buffer(ctx);
   if (!fb) return;
-  float invG = 1.0f / (float)s_G;
+  // Fractional divisor. A glass pixel already visited in the current (partial)
+  // pass holds one extra sample that s_G hasn't counted yet, while unvisited ones
+  // hold s_G. Dividing every glass pixel by the integer s_G makes the image ramp
+  // brighter through a pass then snap dark when s_G steps at the pass boundary.
+  // Raising the divisor smoothly with pass progress (s_cursor/s_npix) lands it on
+  // s_G+1 exactly as the pass wraps, so it's continuous — no snap, only a sub-1/N
+  // shimmer between visited/unvisited pixels that just reads as render noise.
+  float invG = 1.0f / ((float)s_G + (float)s_cursor / (float)s_npix);
   for (int sy = 0; sy < s_H; sy++) {
     GBitmapDataRowInfo row = gbitmap_get_data_row_info(fb, sy);
     int iy = s_ymap[sy];

@@ -28,6 +28,9 @@ function loadSettings() {
     PATTERN: s.PATTERN != null ? s.PATTERN : 1,
     MOOD: s.MOOD != null ? s.MOOD : 0,
     TRANSLUCENCY: s.TRANSLUCENCY != null ? s.TRANSLUCENCY : 1,
+    LIGHTS: s.LIGHTS != null ? s.LIGHTS : 0,
+    MODEL: s.MODEL != null ? s.MODEL : 0,
+    CAMERA: s.CAMERA != null ? s.CAMERA : 0,
   };
 }
 

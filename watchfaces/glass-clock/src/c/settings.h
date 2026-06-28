@@ -33,6 +33,21 @@ typedef enum {
   TRANS_HIGH = 2,   // clearer glass, lots shows through
 } TransLevel;
 
+typedef enum {
+  LIGHTS_SURROUND = 0, // coloured lights scattered all around the glass
+  LIGHTS_BACKLIT = 1,  // lights sit behind the glass facing the camera (glow through)
+} LightPlace;
+
+typedef enum {
+  MODEL_CLASSIC = 0, // compact 2x2 digits (the original look)
+  MODEL_QUARTER = 1, // each digit scaled up to fill ~a quarter of the display
+} DigitModel;
+
+typedef enum {
+  CAM_PERSPECTIVE = 0, // pinhole camera (digits foreshorten with depth)
+  CAM_ORTHO = 1,       // orthographic camera (parallel rays, flat/technical look)
+} CamProj;
+
 typedef struct {
   uint8_t cel;          // CelMode
   uint8_t edge;         // EdgeStyle
@@ -40,8 +55,12 @@ typedef struct {
   uint8_t pattern;      // 0 off, 1 on
   uint8_t mood;         // MoodMode
   uint8_t translucency; // TransLevel
+  uint8_t lights;       // LightPlace
+  uint8_t model;        // DigitModel
+  uint8_t camera;       // CamProj
 } Settings;
 
 #define SETTINGS_DEFAULTS                                                                   \
   ((Settings){.cel = CEL_CONTRAST, .edge = EDGE_CHAMFER, .turn = TURN_OBLIQUE,              \
-              .pattern = 1, .mood = MOOD_SURPRISE, .translucency = TRANS_MEDIUM})
+              .pattern = 1, .mood = MOOD_SURPRISE, .translucency = TRANS_MEDIUM,            \
+              .lights = LIGHTS_SURROUND, .model = MODEL_CLASSIC, .camera = CAM_PERSPECTIVE})

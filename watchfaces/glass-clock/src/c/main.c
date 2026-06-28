@@ -41,7 +41,8 @@ static Settings s_settings;
 
 static void apply_options(void) {
   render_set_options(s_settings.cel, s_settings.edge, s_settings.turn, s_settings.pattern,
-                     s_settings.mood, s_settings.translucency);
+                     s_settings.mood, s_settings.translucency, s_settings.lights,
+                     s_settings.model, s_settings.camera);
 }
 
 #if GC_BENCH
@@ -123,6 +124,12 @@ static void inbox_received(DictionaryIterator *iter, void *context) {
   if ((t = dict_find(iter, MESSAGE_KEY_MOOD))) s_settings.mood = (uint8_t)(t->value->int32 % 3);
   if ((t = dict_find(iter, MESSAGE_KEY_TRANSLUCENCY)))
     s_settings.translucency = (uint8_t)(t->value->int32 % 3);
+  if ((t = dict_find(iter, MESSAGE_KEY_LIGHTS)))
+    s_settings.lights = (uint8_t)(t->value->int32 & 1);
+  if ((t = dict_find(iter, MESSAGE_KEY_MODEL)))
+    s_settings.model = (uint8_t)(t->value->int32 & 1);
+  if ((t = dict_find(iter, MESSAGE_KEY_CAMERA)))
+    s_settings.camera = (uint8_t)(t->value->int32 & 1);
   persist_write_data(PERSIST_SETTINGS, &s_settings, sizeof(s_settings));
   restart_now(); // re-render with the new look immediately
 }

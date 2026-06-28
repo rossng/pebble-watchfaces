@@ -37,7 +37,10 @@
       "TURN",
       "PATTERN",
       "MOOD",
-      "TRANSLUCENCY"
+      "TRANSLUCENCY",
+      "LIGHTS",
+      "MODEL",
+      "CAMERA"
     ]
   }
 }
