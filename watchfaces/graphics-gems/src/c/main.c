@@ -7,7 +7,8 @@
  * Settings come from the phone config page (src/pkjs/index.js) over AppMessage
  * and persist on the watch: render mode (wireframe / unlit / Lambert / Phong),
  * rotation (continuous tumble or tap-to-spin), model (a specific gem or cycle),
- * time layout (wide HH:MM or stacked), translucent time, and jumble-on-shake.
+ * time layout (wide HH:MM or stacked), translucent time, an optional small date
+ * line (DD-MM or MM-DD), and jumble-on-shake.
  *
  * Orientation is three Euler angles advanced by an angular-velocity vector whose
  * speed (s_speed) relaxes toward the mode's resting speed and whose axis wanders
@@ -43,6 +44,7 @@ static Layer *s_layer;
 
 static Settings s_settings;
 static char s_time[6]; // "HH:MM"
+static char s_date[6]; // "DD-MM" / "MM-DD"
 
 // Orientation, the angular-velocity axis (s_v*, wandered by the low-passed
 // torque s_t*), and the current spin speed (s_speed) which relaxes toward the
@@ -244,11 +246,13 @@ static void update_proc(Layer *layer, GContext *ctx) {
   cfg.text_front = MODEL_TEXT_FRONT[mi];
   cfg.fill = MODEL_FILL[mi];
   build_rot(s_ax, s_ay, s_az, cfg.rot);
-  render_scene(ctx, layer_get_bounds(layer), &GEM_MODELS[mi], &cfg, s_time);
+  render_scene(ctx, layer_get_bounds(layer), &GEM_MODELS[mi], &cfg, s_time,
+               s_settings.date_mode == DATE_OFF ? "" : s_date);
 }
 
 static void set_time(struct tm *t) {
   strftime(s_time, sizeof(s_time), clock_is_24h_style() ? "%H:%M" : "%I:%M", t);
+  strftime(s_date, sizeof(s_date), s_settings.date_mode == DATE_MDY ? "%m-%d" : "%d-%m", t);
 }
 
 static void tick_handler(struct tm *tick_time, TimeUnits units) {
@@ -319,6 +323,12 @@ static void inbox_received(DictionaryIterator *iter, void *context) {
     s_settings.text_layout = (TextLayout)(t->value->int32 & 1);
   if ((t = dict_find(iter, MESSAGE_KEY_JUMBLE)))
     s_settings.jumble_on_shake = t->value->int32 != 0;
+  if ((t = dict_find(iter, MESSAGE_KEY_DATE_MODE))) {
+    int32_t v = t->value->int32;
+    s_settings.date_mode = (DateMode)(v < 0 ? 0 : (v > 2 ? 2 : v));
+    time_t now = time(NULL);
+    set_time(localtime(&now)); // re-render the date in the new format
+  }
   save_settings();
   if (active_model() != prev_model) reset_orientation(); // show the new pick clearly
   apply_rotation_mode();

@@ -21,6 +21,12 @@ typedef enum {
   TEXT_STACKED = 1,    // HH over MM, even larger
 } TextLayout;
 
+typedef enum {
+  DATE_OFF = 0, // no date shown
+  DATE_DMY = 1, // DD-MM (e.g. 12-05)
+  DATE_MDY = 2, // MM-DD (e.g. 05-12)
+} DateMode;
+
 // MODEL_CYCLE picks a different model each time the face is shown / each hour,
 // instead of pinning one.
 #define MODEL_CYCLE 0xFF
@@ -32,9 +38,11 @@ typedef struct {
   bool translucent_text;
   TextLayout text_layout;
   bool jumble_on_shake;    // a shake randomises the model / mode / colours
+  DateMode date_mode;      // small date line under/within the time (off by format)
 } Settings;
 
 #define SETTINGS_DEFAULTS \
   ((Settings){ .render_mode = RENDER_PHONG, .rotation_mode = ROTATE_CONTINUOUS, \
                .model_sel = MODEL_CYCLE, .translucent_text = true,             \
-               .text_layout = TEXT_HORIZONTAL, .jumble_on_shake = false })
+               .text_layout = TEXT_HORIZONTAL, .jumble_on_shake = false,       \
+               .date_mode = DATE_DMY })

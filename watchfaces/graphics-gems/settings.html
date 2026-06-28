@@ -111,6 +111,14 @@
         <option value="1">Stacked (largest)</option>
       </select>
     </div>
+    <div class="row">
+      <label>Date</label>
+      <select id="date">
+        <option value="0">Off</option>
+        <option value="1">DD-MM</option>
+        <option value="2">MM-DD</option>
+      </select>
+    </div>
     <div class="row tog">
       <label>Translucent time</label><input type="checkbox" id="translucent" />
     </div>
@@ -132,6 +140,7 @@
       sel("rotation", s.ROTATION_MODE, 0);
       sel("model", s.MODEL_SEL, 255);
       sel("layout", s.TEXT_LAYOUT, 0);
+      sel("date", s.DATE_MODE, 1);
       document.getElementById("translucent").checked = (
         s.TRANSLUCENT_TEXT != null ? s.TRANSLUCENT_TEXT : 1
       )
@@ -144,6 +153,7 @@
           ROTATION_MODE: +document.getElementById("rotation").value,
           MODEL_SEL: +document.getElementById("model").value,
           TEXT_LAYOUT: +document.getElementById("layout").value,
+          DATE_MODE: +document.getElementById("date").value,
           TRANSLUCENT_TEXT: document.getElementById("translucent").checked ? 1 : 0,
           JUMBLE: document.getElementById("jumble").checked ? 1 : 0,
         };

@@ -55,14 +55,15 @@ won't load `data:` URIs (it just hangs on "loading"). Values are sent over
 AppMessage and persisted on the watch. The site build copies each face's
 `settings.html` to `_site/<slug>/settings.html`.
 
-| Setting          | Options                                                  |
-| ---------------- | -------------------------------------------------------- |
-| Render mode      | Wireframe · Unlit · Lambert · Phong                      |
-| Rotation         | Continuous tumble · Spin on tap/shake                    |
-| Model            | Cycle (hourly) · Teapot · Bunny · Icosphere · Torus knot |
-| Time layout      | HH:MM (wide) · Stacked (largest)                         |
-| Translucent time | on / off                                                 |
-| Jumble on shake  | on / off — a shake reshuffles model / mode / colours     |
+| Setting          | Options                                                   |
+| ---------------- | --------------------------------------------------------- |
+| Render mode      | Wireframe · Unlit · Lambert · Phong                       |
+| Rotation         | Continuous tumble · Spin on tap/shake                     |
+| Model            | Cycle (hourly) · Teapot · Bunny · Icosphere · Torus knot  |
+| Time layout      | HH:MM (wide) · Stacked (largest)                          |
+| Date             | Off · DD-MM · MM-DD — a small line under/between the time |
+| Translucent time | on / off                                                  |
+| Jumble on shake  | on / off — a shake reshuffles model / mode / colours      |
 
 ## How the renderer works (`src/c/render.c`)
 

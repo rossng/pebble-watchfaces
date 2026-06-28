@@ -29,6 +29,7 @@ function loadSettings() {
     TEXT_LAYOUT: s.TEXT_LAYOUT != null ? s.TEXT_LAYOUT : 0,
     TRANSLUCENT_TEXT: s.TRANSLUCENT_TEXT != null ? s.TRANSLUCENT_TEXT : 1,
     JUMBLE: s.JUMBLE != null ? s.JUMBLE : 0,
+    DATE_MODE: s.DATE_MODE != null ? s.DATE_MODE : 1,
   };
 }
 

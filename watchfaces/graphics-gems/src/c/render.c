@@ -47,6 +47,7 @@ static const float GDX = 0.18f, GDY = 0.97f, GDZ = 0.30f;
 
 static GFont s_font_wide; // HH:MM on one line
 static GFont s_font_tall; // HH / MM stacked, larger
+static GFont s_font_date; // small date line (digits + hyphen)
 
 // Per-frame scratch (sized for the largest model).
 static float s_vx[GEM_MAX_VERTS], s_vy[GEM_MAX_VERTS], s_vz[GEM_MAX_VERTS]; // view space
@@ -62,11 +63,13 @@ static const uint8_t BAYER[4][4] = {
 void render_init(void) {
   s_font_wide = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_TIME_WIDE_66));
   s_font_tall = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_TIME_TALL_96));
+  s_font_date = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_DATE_28));
 }
 
 void render_deinit(void) {
   fonts_unload_custom_font(s_font_wide);
   fonts_unload_custom_font(s_font_tall);
+  fonts_unload_custom_font(s_font_date);
 }
 
 static inline float clampf(float v, float lo, float hi) {
@@ -203,22 +206,35 @@ static void draw_centered_line(GContext *ctx, int w, const char *s, GFont font, 
 }
 
 // Draw the time, vertically centred: either HH:MM on one near-full-width line or
-// HH over MM, larger.
-static void draw_time_text(GContext *ctx, GRect bounds, const char *time_str, TextLayout layout) {
+// HH over MM, larger. An optional small date line sits just below the wide time,
+// or in the gap between the stacked HH/MM (empty/NULL date_str omits it).
+static void draw_time_text(GContext *ctx, GRect bounds, const char *time_str,
+                           const char *date_str, TextLayout layout) {
   int w = bounds.size.w, mid = bounds.size.h / 2;
+  bool has_date = date_str && date_str[0];
   if (layout == TEXT_STACKED) {
     char hh[3] = {time_str[0], time_str[1], 0};
     char mm[3] = {time_str[3], time_str[4], 0};
     int half = 46; // vertical offset of each line's centre from the middle
-    draw_centered_line(ctx, w, hh, s_font_tall, mid - half);
-    draw_centered_line(ctx, w, mm, s_font_tall, mid + half);
+    if (has_date) {
+      // Keep the same HH/MM gap (2*half) but shift the pair up so the date tucks
+      // underneath, leaving the whole group vertically centred. Both targets
+      // (emery 228, gabbro 260) have ample room.
+      draw_centered_line(ctx, w, hh, s_font_tall, mid - half - 16);
+      draw_centered_line(ctx, w, mm, s_font_tall, mid + half - 16);
+      draw_centered_line(ctx, w, date_str, s_font_date, mid + half + 48);
+    } else {
+      draw_centered_line(ctx, w, hh, s_font_tall, mid - half);
+      draw_centered_line(ctx, w, mm, s_font_tall, mid + half);
+    }
   } else {
     draw_centered_line(ctx, w, time_str, s_font_wide, mid);
+    if (has_date) draw_centered_line(ctx, w, date_str, s_font_date, mid + 50);
   }
 }
 
 void render_scene(GContext *ctx, GRect bounds, const GemModel *model, const RenderConfig *cfg,
-                  const char *time_str) {
+                  const char *time_str, const char *date_str) {
   const int W = bounds.size.w, H = bounds.size.h;
   const float cx = W * 0.5f, cy = H * 0.5f;
   const float focal = cfg->fill * 0.5f * (W < H ? W : H) * CAM_DIST;
@@ -343,7 +359,7 @@ void render_scene(GContext *ctx, GRect bounds, const GemModel *model, const Rend
         graphics_draw_line(ctx, GPoint(s_sx[b], s_sy[b]), GPoint(s_sx[c], s_sy[c]));
         graphics_draw_line(ctx, GPoint(s_sx[c], s_sy[c]), GPoint(s_sx[a], s_sy[a]));
       }
-      if (pass == 0) draw_time_text(ctx, bounds, time_str, cfg->text_layout);
+      if (pass == 0) draw_time_text(ctx, bounds, time_str, date_str, cfg->text_layout);
     }
     return;
   }
@@ -361,7 +377,7 @@ void render_scene(GContext *ctx, GRect bounds, const GemModel *model, const Rend
   }
   graphics_release_frame_buffer(ctx, fb);
 
-  draw_time_text(ctx, bounds, time_str, cfg->text_layout);
+  draw_time_text(ctx, bounds, time_str, date_str, cfg->text_layout);
 
   fb = graphics_capture_frame_buffer(ctx);
   if (cfg->translucent_text) {
