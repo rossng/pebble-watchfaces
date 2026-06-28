@@ -45,4 +45,4 @@ typedef struct {
   ((Settings){ .render_mode = RENDER_PHONG, .rotation_mode = ROTATE_CONTINUOUS, \
                .model_sel = MODEL_CYCLE, .translucent_text = true,             \
                .text_layout = TEXT_HORIZONTAL, .jumble_on_shake = false,       \
-               .date_mode = DATE_DMY })
+               .date_mode = DATE_OFF })
