@@ -99,6 +99,12 @@ unsigned long render_bench_trans(void) { return g_bench_trans; }
 // two-surface distortion. The glass is chunky/stylised so it largely holds.
 #define GC_THIN_REFRACT 1
 #define THIN_GLASS_LEN (2.0f * HZ) // approximate path length through the slab
+// #5 Fast glossy: skip the normalize on the perturbed reflection/refraction
+// direction (saves 2 rsqrt/sample). env_scene() tolerates a slightly non-unit
+// direction (the glossy lobe is already a soft random perturbation), but the
+// light blobs use dot(dir, light)^n, so a non-unit dir can shift their intensity
+// a touch — hence a toggle. Default OFF pending on-watch sign-off.
+#define GC_FAST_GLOSSY 0
 
 // Contrast enforcement (driven by the 2D stencil in the blit). Kept gentle so it
 // guarantees a legibility floor + a dark background WITHOUT washing out the glass
@@ -340,7 +346,12 @@ static V3 glossy(V3 d, unsigned int rh, float rough) {
       fract1((float)s_pass * 0.6710436067f + (float)((rh >> 8) & 0xffu) * (1.0f / 256.0f)) - 0.5f;
   float oz =
       fract1((float)s_pass * 0.5497004779f + (float)((rh >> 16) & 0xffu) * (1.0f / 256.0f)) - 0.5f;
-  return vnorm(v3(d.x + ox * rough, d.y + oy * rough, d.z + oz * rough));
+  V3 pd = v3(d.x + ox * rough, d.y + oy * rough, d.z + oz * rough);
+#if GC_FAST_GLOSSY
+  return pd; // skip normalize (saves 1 rsqrt); env lookup tolerates a near-unit dir
+#else
+  return vnorm(pd);
+#endif
 }
 
 // Coloured lights only (no base) — broad blobs, sampled for specular + as part
