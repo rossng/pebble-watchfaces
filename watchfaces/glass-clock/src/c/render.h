@@ -17,7 +17,8 @@ void render_init(GRect bounds);
 
 // Apply config-page settings (see settings.h enums). Takes effect on the next
 // render_restart, which the caller should trigger.
-void render_set_options(int cel, int edge, int turn, int pattern, int mood, int translucency);
+void render_set_options(int cel, int edge, int turn, int pattern, int mood, int translucency,
+                        int lights, int model, int camera);
 
 // Restart the accumulation for a new minute: rebuild the digit geometry from the
 // 4-character "HHMM" string, pick a fresh random lighting mood, and seed pass 0

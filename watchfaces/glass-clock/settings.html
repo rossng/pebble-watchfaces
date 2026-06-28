@@ -99,6 +99,27 @@
       </select>
     </div>
     <div class="row">
+      <label>Lights</label>
+      <select id="lights">
+        <option value="0">All around</option>
+        <option value="1">Behind the glass</option>
+      </select>
+    </div>
+    <div class="row">
+      <label>Number model</label>
+      <select id="model">
+        <option value="0">Classic (2×2)</option>
+        <option value="1">Quarter-screen</option>
+      </select>
+    </div>
+    <div class="row">
+      <label>Camera</label>
+      <select id="camera">
+        <option value="0">Perspective</option>
+        <option value="1">Orthographic</option>
+      </select>
+    </div>
+    <div class="row">
       <label>Background pattern</label>
       <select id="pattern">
         <option value="0">Off</option>
@@ -130,6 +151,9 @@
       sel("edge", s.EDGE_STYLE, 2);
       sel("turn", s.TURN, 1);
       sel("trans", s.TRANSLUCENCY, 1);
+      sel("lights", s.LIGHTS, 0);
+      sel("model", s.MODEL, 0);
+      sel("camera", s.CAMERA, 0);
       sel("pattern", s.PATTERN, 1);
       sel("mood", s.MOOD, 0);
       document.getElementById("save").addEventListener("click", function () {
@@ -138,6 +162,9 @@
           EDGE_STYLE: +document.getElementById("edge").value,
           TURN: +document.getElementById("turn").value,
           TRANSLUCENCY: +document.getElementById("trans").value,
+          LIGHTS: +document.getElementById("lights").value,
+          MODEL: +document.getElementById("model").value,
+          CAMERA: +document.getElementById("camera").value,
           PATTERN: +document.getElementById("pattern").value,
           MOOD: +document.getElementById("mood").value,
         };

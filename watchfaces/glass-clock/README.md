@@ -52,6 +52,21 @@ Configurable from the phone (Pebble app → Glass Clock → Settings):
 - **Digit edges** — Sharp / Bevelled / Chamfered
 - **3D turn** — Flat-on / Oblique
 - **Translucency** — Solid / Medium / High
+- **Lights** — All around / Behind the glass. _Behind the glass_ places the
+  randomised coloured lights in the hemisphere behind the digits, facing the
+  camera, so they bloom **through** the refracted glass body (a backlit glow)
+  instead of glinting off the front.
+- **Number model** — Classic / Quarter-screen. _Classic_ is the compact 2×2 of
+  7-segment digits. _Quarter-screen_ swaps in a bold, space-filling numeral font
+  (à la Pebble's _Just Big_ / _Revolution_) scaled so each digit nearly fills a
+  quarter of the display; it's drawn flat-on regardless of the 3D-turn setting to
+  keep the space-filling look.
+- **Camera** — Perspective / Orthographic. _Orthographic_ fires parallel rays
+  (the ray origin spreads across the image plane instead of a pinhole at the eye),
+  so the digits don't foreshorten with depth — a flat, technical projection. The
+  bare background loses its gradient under ortho (a directional environment is
+  uniform when every ray is parallel), but the glass reflection/refraction still
+  vary per pixel.
 - **Background pattern** — Off / On
 - **Colour mood** — Surprise me / Neon / Jewel
 
