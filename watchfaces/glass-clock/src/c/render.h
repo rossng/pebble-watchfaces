@@ -35,3 +35,16 @@ void render_blit(GContext *ctx, GRect bounds);
 // Samples accumulated per pixel so far this minute (1 right after a restart).
 // Used to stop the timer once the image has converged, to save battery.
 int render_passes(void);
+
+// ---- benchmarking (compile-time switch; 0 = off for release) ----
+// The dominant soft-float cost is map_active() (SDF evaluation). Counting calls
+// gives a deterministic, emulator-timing-independent cost metric. With a fixed
+// bench scene (render_restart forces a constant time + seed under GC_BENCH) the
+// counts are directly comparable across builds. Flip to 1 to re-bench changes:
+// the watch then shows a fixed "10:27" and logs evals/sample over `pebble logs`.
+#define GC_BENCH 0
+#if GC_BENCH
+unsigned long render_bench_evals(void);    // map_active() calls since last reset
+unsigned long render_bench_samples(void);  // trace_pixel() calls since last reset
+unsigned long render_bench_geom_evals(void); // map_active() calls in the per-minute geometry pass
+#endif
