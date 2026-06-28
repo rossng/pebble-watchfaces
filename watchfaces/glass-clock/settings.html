@@ -1,0 +1,175 @@
+<!doctype html>
+<!--
+  Hosted settings page for the Glass Clock watchface.
+
+  The Pebble phone app's config webview needs a real https URL (a data: URI just
+  hangs on "loading"), so this is served from the project's GitHub Pages site and
+  src/pkjs/index.js points `Pebble.openURL` at it. Current settings arrive in the
+  URL hash (so the form pre-fills); the new values are posted back through
+  pebblejs://close. Keep the keys in sync with package.json `messageKeys`.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Glass Clock — Settings</title>
+    <style>
+      body {
+        font-family: -apple-system, Helvetica, Arial, sans-serif;
+        margin: 0;
+        background: #111;
+        color: #eee;
+      }
+      header {
+        background: #000;
+        padding: 22px 18px;
+        font-size: 22px;
+        font-weight: 600;
+        border-bottom: 1px solid #333;
+      }
+      .row {
+        padding: 16px 18px;
+        border-bottom: 1px solid #222;
+      }
+      label {
+        display: block;
+        font-size: 13px;
+        color: #9ad;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin-bottom: 8px;
+      }
+      select {
+        width: 100%;
+        padding: 12px;
+        font-size: 17px;
+        background: #1c1c1c;
+        color: #fff;
+        border: 1px solid #333;
+        border-radius: 8px;
+      }
+      button {
+        width: 100%;
+        padding: 16px;
+        font-size: 18px;
+        font-weight: 600;
+        background: #2a7;
+        color: #000;
+        border: 0;
+        border-radius: 10px;
+        margin: 18px 0;
+      }
+      .wrap {
+        padding: 0 18px;
+      }
+    </style>
+  </head>
+  <body>
+    <header>Glass Clock</header>
+    <div class="row">
+      <label>Cel outline</label>
+      <select id="cel">
+        <option value="0">None</option>
+        <option value="1">White</option>
+        <option value="2">Black</option>
+        <option value="3">Auto contrast</option>
+      </select>
+    </div>
+    <div class="row">
+      <label>Digit edges</label>
+      <select id="edge">
+        <option value="0">Sharp</option>
+        <option value="1">Bevelled</option>
+        <option value="2">Chamfered</option>
+      </select>
+    </div>
+    <div class="row">
+      <label>3D turn</label>
+      <select id="turn">
+        <option value="0">Flat-on</option>
+        <option value="1">Oblique</option>
+      </select>
+    </div>
+    <div class="row">
+      <label>Translucency</label>
+      <select id="trans">
+        <option value="0">Solid</option>
+        <option value="1">Medium</option>
+        <option value="2">High</option>
+      </select>
+    </div>
+    <div class="row">
+      <label>Lights</label>
+      <select id="lights">
+        <option value="0">All around</option>
+        <option value="1">Behind the glass</option>
+      </select>
+    </div>
+    <div class="row">
+      <label>Number model</label>
+      <select id="model">
+        <option value="0">Classic (2×2)</option>
+        <option value="1">Quarter-screen</option>
+      </select>
+    </div>
+    <div class="row">
+      <label>Camera</label>
+      <select id="camera">
+        <option value="0">Perspective</option>
+        <option value="1">Orthographic</option>
+      </select>
+    </div>
+    <div class="row">
+      <label>Background pattern</label>
+      <select id="pattern">
+        <option value="0">Off</option>
+        <option value="1">On</option>
+      </select>
+    </div>
+    <div class="row">
+      <label>Colour mood</label>
+      <select id="mood">
+        <option value="0">Surprise me</option>
+        <option value="1">Neon</option>
+        <option value="2">Jewel</option>
+      </select>
+    </div>
+    <div class="wrap"><button id="save">Save</button></div>
+    <script>
+      function current() {
+        try {
+          return JSON.parse(decodeURIComponent(location.hash.slice(1))) || {};
+        } catch (e) {
+          return {};
+        }
+      }
+      var s = current();
+      function sel(id, v, def) {
+        document.getElementById(id).value = String(v != null ? v : def);
+      }
+      sel("cel", s.CEL_MODE, 3);
+      sel("edge", s.EDGE_STYLE, 2);
+      sel("turn", s.TURN, 1);
+      sel("trans", s.TRANSLUCENCY, 1);
+      sel("lights", s.LIGHTS, 0);
+      sel("model", s.MODEL, 0);
+      sel("camera", s.CAMERA, 0);
+      sel("pattern", s.PATTERN, 1);
+      sel("mood", s.MOOD, 0);
+      document.getElementById("save").addEventListener("click", function () {
+        var o = {
+          CEL_MODE: +document.getElementById("cel").value,
+          EDGE_STYLE: +document.getElementById("edge").value,
+          TURN: +document.getElementById("turn").value,
+          TRANSLUCENCY: +document.getElementById("trans").value,
+          LIGHTS: +document.getElementById("lights").value,
+          MODEL: +document.getElementById("model").value,
+          CAMERA: +document.getElementById("camera").value,
+          PATTERN: +document.getElementById("pattern").value,
+          MOOD: +document.getElementById("mood").value,
+        };
+        location.href = "pebblejs://close#" + encodeURIComponent(JSON.stringify(o));
+      });
+    </script>
+  </body>
+</html>
