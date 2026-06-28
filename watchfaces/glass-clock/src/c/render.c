@@ -74,12 +74,14 @@ unsigned long render_bench_trans(void) { return g_bench_trans; }
 
 // Decoupled shading (deferred): the primary hit for a solid-interior pixel is the
 // same every sample, so cache its depth once per minute (from the coverage probe)
-// and skip the primary march on every accumulation sample. Depth is quantized to
-// 1 byte over the scene's hit-distance range; 0 means "not cached, march it"
-// (used for silhouette-edge pixels, which keep per-sample jitter for AA).
+// and skip the primary march on every accumulation sample. The cache stores
+// LINEAR depth (|hit.z|), quantized to 1 byte; 0 means "not cached, march it"
+// (used for silhouette-edge pixels, which keep per-sample jitter for AA). Linear
+// depth (vs ray distance) lets view_pos() reconstruct neighbour positions for the
+// depth-normal with no per-neighbour normalize.
 #define GC_DEFER 1 // 1 = deferred shading (cache primary depth, skip per-sample march)
-#define DEPTH_LO 2.8f
-#define DEPTH_HI 5.6f
+#define DEPTH_LO 2.0f
+#define DEPTH_HI 5.2f
 #define DEPTH_RANGE (DEPTH_HI - DEPTH_LO)
 
 // ---- fidelity-affecting speculative toggles (A/B with these) ----
@@ -394,6 +396,17 @@ static V3 primary_dir(int ix, int iy, float jx, float jy) {
   return vnorm(v3(px * aspect * TANF, py * TANF, -1.0f));
 }
 
+// Reconstruct the view-space hit position of pixel (ix,iy) from its LINEAR depth
+// zc (= |hit.z|, what the deferred cache stores). Pure multiplies — no normalize.
+// This is why the cache stores linear depth, not ray distance: neighbour
+// positions for the depth-normal reconstruct without a per-neighbour rsqrt.
+static V3 view_pos(int ix, int iy, float zc) {
+  float px = (((float)ix + 0.5f) / (float)s_RW) * 2.0f - 1.0f;
+  float py = 1.0f - (((float)iy + 0.5f) / (float)s_RH) * 2.0f;
+  float aspect = (float)s_RW / (float)s_RH;
+  return v3(px * aspect * TANF * zc, py * TANF * zc, -zc);
+}
+
 // Conservative sphere trace from the ray's AABB entry to its exit; returns 1 on
 // hit with *out_t set to the hit parameter. Shared by the primary ray, the
 // coverage probe and the hit test so they can't drift apart.
@@ -430,10 +443,13 @@ static int normal_from_depth(int ix, int iy, V3 *outN) {
   uint8_t ql = s_pdepth[iy * s_RW + (ix - 1)], qr = s_pdepth[iy * s_RW + (ix + 1)];
   uint8_t qu = s_pdepth[(iy - 1) * s_RW + ix], qd = s_pdepth[(iy + 1) * s_RW + ix];
   if (!ql || !qr || !qu || !qd) return 0;
-  V3 pl = vscale(primary_dir(ix - 1, iy, 0.0f, 0.0f), depth_dequantize(ql));
-  V3 pr = vscale(primary_dir(ix + 1, iy, 0.0f, 0.0f), depth_dequantize(qr));
-  V3 pu = vscale(primary_dir(ix, iy - 1, 0.0f, 0.0f), depth_dequantize(qu));
-  V3 pd = vscale(primary_dir(ix, iy + 1, 0.0f, 0.0f), depth_dequantize(qd));
+  // Reconstruct neighbour positions from linear depth with no per-neighbour
+  // normalize (view_pos is pure muls), so the whole normal costs 1 rsqrt instead
+  // of 5 — the cost model's biggest remaining per-sample transcendental sink.
+  V3 pl = view_pos(ix - 1, iy, depth_dequantize(ql));
+  V3 pr = view_pos(ix + 1, iy, depth_dequantize(qr));
+  V3 pu = view_pos(ix, iy - 1, depth_dequantize(qu));
+  V3 pd = view_pos(ix, iy + 1, depth_dequantize(qd));
   *outN = vnorm(vcross(vsub(pr, pl), vsub(pd, pu)));
   return 1;
 }
@@ -490,13 +506,16 @@ static V3 trace_pixel(int idx) {
   if (nact == 0) return env_scene(dir);
   if (t_enter < 0.0f) t_enter = 0.0f;
 
-  float t;
+  V3 p;
   if (q) {
-    t = depth_dequantize(q); // cached primary hit — no march
-  } else if (!march_active(ro, dir, t_enter, t_exit, act, nact, &t)) {
-    return env_scene(dir);
+    // Cached primary hit: reconstruct position from linear depth (no march, no
+    // normalize — view_pos is pure muls).
+    p = view_pos(ix, iy, depth_dequantize(q));
+  } else {
+    float t;
+    if (!march_active(ro, dir, t_enter, t_exit, act, nact, &t)) return env_scene(dir);
+    p = vadd(ro, vscale(dir, t));
   }
-  V3 p = vadd(ro, vscale(dir, t));
 
   V3 N;
 #if GC_NORMAL_FROM_DEPTH
@@ -668,11 +687,13 @@ static void build_coverage(void) {
 
       V3 N = v3(0, 0, 0);
       float dep = 0.0f;
-      int hh = primary_probe(primary_dir(ix, iy, 0.0f, 0.0f), &N, &dep);
-      // Cache the primary depth for deferred shading, but ONLY for fully-covered
-      // interior pixels (cov==4). Silhouette-edge pixels stay uncached so they
-      // keep per-sample jittered marching (subpixel AA where it's visible).
-      if (s_pdepth) s_pdepth[idx] = (GC_DEFER && cov == 4 && hh) ? depth_quantize(dep) : 0;
+      V3 cdir = primary_dir(ix, iy, 0.0f, 0.0f);
+      int hh = primary_probe(cdir, &N, &dep);
+      // Cache LINEAR depth (|hit.z| = ray-distance * |dir.z|) for deferred shading,
+      // but ONLY for fully-covered interior pixels (cov==4). Silhouette-edge pixels
+      // stay uncached so they keep per-sample jittered marching (subpixel AA).
+      if (s_pdepth)
+        s_pdepth[idx] = (GC_DEFER && cov == 4 && hh) ? depth_quantize(dep * fabs_i(cdir.z)) : 0;
       int edge = 0;
       if (ix > 0 && hh != lhit) edge = 255;      // silhouette (left)
       if (iy > 0 && hh != s_prh[ix]) edge = 255; // silhouette (up)
