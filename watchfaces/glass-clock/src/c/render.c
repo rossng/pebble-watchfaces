@@ -115,6 +115,8 @@ static int s_G, s_cursor, s_pass;
 static unsigned int s_stride;
 
 static uint8_t s_mask[4];
+static uint8_t s_seg[4][7]; // lit segment indices per digit (precomputed at restart)
+static uint8_t s_nseg[4];   // count of lit segments per digit
 static V3 s_center[4];
 static V3 s_lo[4], s_hi[4];
 static float s_rc[4], s_rs[4]; // per-digit Y-rotation (cos, sin) — slight 3D turn
@@ -180,7 +182,18 @@ static inline float luma(V3 c) { return 0.299f * c.x + 0.587f * c.y + 0.114f * c
 static inline float sdRBox2(float px, float py, float bx, float by, float r) {
   float dx = fabs_i(px) - bx, dy = fabs_i(py) - by;
   float ax = dx > 0.0f ? dx : 0.0f, ay = dy > 0.0f ? dy : 0.0f;
-  float outside = fast_sqrt(ax * ax + ay * ay);
+  // The sqrt is only needed in the corner region (both axes outside). When one
+  // axis is inside, sqrt(a^2) == a — skip the soft-float rsqrt entirely. This
+  // fires up to 7x per digit2D in the hottest loop, and the single-axis result
+  // is exact (no rsqrt approximation error).
+  float outside;
+  if (ax == 0.0f) {
+    outside = ay;
+  } else if (ay == 0.0f) {
+    outside = ax;
+  } else {
+    outside = fast_sqrt(ax * ax + ay * ay);
+  }
   float inside = dx > dy ? dx : dy;
   if (inside > 0.0f) inside = 0.0f;
   return outside + inside - r;
@@ -190,18 +203,19 @@ static inline float smin(float a, float b, float k) {
   h = clampf_i(h, 0.0f, 1.0f);
   return (b + (a - b) * h) - k * h * (1.0f - h);
 }
-static float digit2D(float u, float v, uint8_t mask) {
+static float digit2D(float u, float v, int k) {
   float d = 1e9f;
-  for (int s = 0; s < 7; s++) {
-    if (mask & (1 << s)) {
-      float dd = sdRBox2(u - SEG[s].cx, v - SEG[s].cy, SEG[s].bx, SEG[s].by, CR);
-      d = smin(d, dd, SMK);
-    }
+  int n = s_nseg[k];
+  const uint8_t *seg = s_seg[k];
+  for (int j = 0; j < n; j++) {
+    const Seg *S = &SEG[seg[j]];
+    float dd = sdRBox2(u - S->cx, v - S->cy, S->bx, S->by, CR);
+    d = smin(d, dd, SMK);
   }
   return d;
 }
-static float digit3D(float px, float py, float pz, uint8_t mask) {
-  float d2 = digit2D(px, py, mask);
+static float digit3D(float px, float py, float pz, int k) {
+  float d2 = digit2D(px, py, k);
   float wz = fabs_i(pz) - HZ;
   float box = d2 > wz ? d2 : wz; // sharp extruded box
   if (s_opt_edge == 0) return box;
@@ -225,7 +239,7 @@ static float map_active(V3 p, const int *act, int nact) {
     // rotate world->digit-local by -angle around Y
     float ux = s_rc[k] * lx - s_rs[k] * lz;
     float uz = s_rs[k] * lx + s_rc[k] * lz;
-    float dd = digit3D(ux, ly, uz, s_mask[k]);
+    float dd = digit3D(ux, ly, uz, k);
     if (dd < d) d = dd;
   }
   return d;
@@ -312,7 +326,15 @@ static V3 primary_dir(int ix, int iy, float jx, float jy) {
 static V3 trace_pixel(int idx, unsigned int seed) {
   unsigned int st = seed;
   int ix = idx % s_RW, iy = idx / s_RW;
-  float jx = rng_next(&st) - 0.5f, jy = rng_next(&st) - 0.5f;
+  // Subpixel AA jitter from the R2 low-discrepancy sequence (indexed by pass),
+  // Cranley-Patterson-rotated by a per-pixel hash so neighbours are decorrelated.
+  // Unlike plain random jitter this tiles the pixel evenly, so edges resolve with
+  // far less noise for the same number of accumulated samples.
+  unsigned int rh = hash_u32((unsigned int)idx * 0x9e3779b1u);
+  float rotx = (float)(rh & 0xffffu) * (1.0f / 65536.0f);
+  float roty = (float)(rh >> 16) * (1.0f / 65536.0f);
+  float jx = fract1((float)s_pass * 0.7548776662f + rotx) - 0.5f;
+  float jy = fract1((float)s_pass * 0.5698402909f + roty) - 0.5f;
   V3 dir = primary_dir(ix, iy, jx, jy);
   V3 ro = v3(0, 0, 0);
 
@@ -596,7 +618,16 @@ void render_init(GRect bounds) {
 
 void render_restart(const char *hhmm) {
   if (!s_sum || !s_cov || !s_edge) return;
-  for (int k = 0; k < 4; k++) s_mask[k] = DIGIT_SEG[hhmm[k] - '0'];
+  for (int k = 0; k < 4; k++) {
+    uint8_t mask = DIGIT_SEG[hhmm[k] - '0'];
+    s_mask[k] = mask;
+    // Precompute the lit-segment index list so digit2D iterates only lit
+    // segments (and drops the per-segment bit test) in the hot SDF loop.
+    int n = 0;
+    for (int s = 0; s < 7; s++)
+      if (mask & (1 << s)) s_seg[k][n++] = (uint8_t)s;
+    s_nseg[k] = (uint8_t)n;
+  }
   s_center[0] = v3(-COL_X, ROW_Y, -CAM_DIST);
   s_center[1] = v3(COL_X, ROW_Y, -CAM_DIST);
   s_center[2] = v3(-COL_X, -ROW_Y, -CAM_DIST);
@@ -709,21 +740,31 @@ int render_passes(void) { return s_G; }
 
 void render_step(int budget) {
   if (!s_sum) return;
+  // Advance the cursor by exactly `budget` steps per burst (same as before), so
+  // the per-burst wall time stays bounded — the firmware must get the CPU back
+  // promptly between bursts or input + the screenshot RPC stall. We only skip
+  // the *work* for background pixels, never inflate the burst.
   for (int n = 0; n < budget; n++) {
     // Offset the visitation phase per pass so the transient fill pattern moves
     // around rather than re-tracing the same lattice each pass.
     unsigned int seq = (unsigned int)s_cursor + (unsigned int)s_pass * 2654435761u;
     int i = (int)((seq * s_stride) % (unsigned int)s_npix);
-    unsigned int seed = hash_u32((unsigned int)i ^ ((unsigned int)s_pass * 40503u));
-    V3 c = trace_pixel(i, seed);
-    int r = (int)(clampf_i(c.x, 0.0f, 1.0f) * 255.0f);
-    int g = (int)(clampf_i(c.y, 0.0f, 1.0f) * 255.0f);
-    int b = (int)(clampf_i(c.z, 0.0f, 1.0f) * 255.0f);
-    uint16_t *px = &s_sum[i * 3];
-    int nr = px[0] + r, ng = px[1] + g, nb = px[2] + b;
-    px[0] = nr > 65535 ? 65535 : (uint16_t)nr;
-    px[1] = ng > 65535 ? 65535 : (uint16_t)ng;
-    px[2] = nb > 65535 ? 65535 : (uint16_t)nb;
+
+    // Background pixels (no glass coverage) are deterministic env_scene — already
+    // seeded at restart and never re-traced. Skipping their trace makes each
+    // burst cheaper than tracing the whole frame did, at no cost to the image.
+    if (s_cov[i] != 0) {
+      unsigned int seed = hash_u32((unsigned int)i ^ ((unsigned int)s_pass * 40503u));
+      V3 c = trace_pixel(i, seed);
+      int r = (int)(clampf_i(c.x, 0.0f, 1.0f) * 255.0f);
+      int g = (int)(clampf_i(c.y, 0.0f, 1.0f) * 255.0f);
+      int b = (int)(clampf_i(c.z, 0.0f, 1.0f) * 255.0f);
+      uint16_t *px = &s_sum[i * 3];
+      int nr = px[0] + r, ng = px[1] + g, nb = px[2] + b;
+      px[0] = nr > 65535 ? 65535 : (uint16_t)nr;
+      px[1] = ng > 65535 ? 65535 : (uint16_t)ng;
+      px[2] = nb > 65535 ? 65535 : (uint16_t)nb;
+    }
     if (++s_cursor >= s_npix) {
       s_cursor = 0;
       s_pass++;
@@ -754,8 +795,11 @@ void render_blit(GContext *ctx, GRect bounds) {
     for (int sx = row.min_x; sx <= row.max_x; sx++) {
       int idx = base + s_xmap[sx];
       uint16_t *px = &s_sum[idx * 3];
-      V3 g = v3((float)px[0] * invG / 255.0f, (float)px[1] * invG / 255.0f,
-                (float)px[2] * invG / 255.0f);
+      // Glass pixels accumulate one sample per pass → divide by the pass count.
+      // Background pixels hold a single deterministic seed sample (never
+      // re-traced) → divide by 1. Both stored as value*255.
+      float sc = (s_cov[idx] == 0) ? (1.0f / 255.0f) : (invG / 255.0f);
+      V3 g = v3((float)px[0] * sc, (float)px[1] * sc, (float)px[2] * sc);
 
       // --- contrast enforcement from the coverage stencil ---
       float fill = (float)s_cov[idx] * (1.0f / 252.0f); // 1 inside glass, 0 outside

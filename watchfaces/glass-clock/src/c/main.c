@@ -23,7 +23,11 @@
 // (expensive) full-screen blit runs only every few ticks — otherwise the heavy
 // soft-float work starves the firmware (input + the screenshot RPC stop).
 #define FRAME_MS 50          // idle gap between bursts
-#define N_PIX_PER_TICK 110   // samples traced per burst
+#define N_PIX_PER_TICK 150   // cursor steps per burst (background pixels are skipped
+                             // cheaply, so this traces fewer glass samples than the
+                             // old all-pixel 110 — modest convergence boost, lighter
+                             // burst; raise further only after on-watch responsiveness
+                             // testing)
 #define BLIT_EVERY 6         // repaint every Nth tick
 #define MAX_PASSES 96        // stop accumulating once converged (next minute restarts it)
 #define PERSIST_SETTINGS 1
@@ -64,6 +68,7 @@ static void set_time(struct tm *t) {
 static void tick_handler(struct tm *tick_time, TimeUnits units) {
   set_time(tick_time);
   render_restart(s_time); // new minute: rebuild digits, fresh mood/pattern/angle, reseed
+  s_ticks = 0;
   ensure_animating();
   layer_mark_dirty(s_layer);
 }

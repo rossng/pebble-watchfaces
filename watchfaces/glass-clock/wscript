@@ -35,6 +35,10 @@ def build(ctx):
         # The SDK compiles app C with -Os; the SDF raymarcher is a soft-float hot
         # loop where optimizing for speed buys real frames. The later flag wins,
         # so this overrides the SDK's -Os for our sources.
+        # (-O3 was tried: it grows the binary ~8KB — a real cost against the tight
+        # app heap — for no measurable speed gain on this cache-limited core, and
+        # -ffast-math would break the union type-pun in fast_rsqrt. -O2 is the
+        # sweet spot.)
         ctx.env.append_value('CFLAGS', ['-O2'])
         ctx.set_group(ctx.env.PLATFORM_NAME)
         app_elf = '{}/pebble-app.elf'.format(ctx.env.BUILD_DIR)
