@@ -22,5 +22,6 @@ void render_deinit(void);
 
 // Draw one frame: the model under `cfg`, with `time_str` as large 2D text
 // floating just in front of the model centre (so the model pierces it).
+// `date_str` is an optional small date line (empty/NULL to omit).
 void render_scene(GContext *ctx, GRect bounds, const GemModel *model,
-                  const RenderConfig *cfg, const char *time_str);
+                  const RenderConfig *cfg, const char *time_str, const char *date_str);

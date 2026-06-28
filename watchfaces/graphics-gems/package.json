@@ -1,6 +1,6 @@
 {
   "name": "graphics-gems",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "private": true,
   "description": "A native Pebble C watchface that renders classic computer-graphics research models (Utah teapot, Stanford bunny, and friends) with a tiny software rasterizer, the time floating in the 3D scene.",
   "keywords": [
@@ -39,7 +39,8 @@
       "MODEL_SEL",
       "TRANSLUCENT_TEXT",
       "TEXT_LAYOUT",
-      "JUMBLE"
+      "JUMBLE",
+      "DATE_MODE"
     ],
     "resources": {
       "media": [
@@ -54,6 +55,12 @@
           "name": "TIME_TALL_96",
           "file": "fonts/Poppins-ExtraBold.ttf",
           "characterRegex": "[0-9 ]"
+        },
+        {
+          "type": "font",
+          "name": "DATE_28",
+          "file": "fonts/Poppins-ExtraBold.ttf",
+          "characterRegex": "[0-9-]"
         }
       ]
     }
