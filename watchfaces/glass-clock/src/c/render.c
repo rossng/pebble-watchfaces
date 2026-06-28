@@ -34,9 +34,13 @@
 static unsigned long s_bench_evals;   // map_active() calls (progressive shading)
 static unsigned long s_bench_samples; // trace_pixel() calls
 static unsigned long s_bench_geom;    // map_active() calls in the geometry/coverage pass
+static unsigned long s_bench_env;     // env_scene() calls (shading-float proxy)
+unsigned long g_bench_trans;          // transcendentals (rsqrt/sin/exp); incremented in fastmath.h
 unsigned long render_bench_evals(void) { return s_bench_evals; }
 unsigned long render_bench_samples(void) { return s_bench_samples; }
 unsigned long render_bench_geom_evals(void) { return s_bench_geom; }
+unsigned long render_bench_env(void) { return s_bench_env; }
+unsigned long render_bench_trans(void) { return g_bench_trans; }
 #endif
 
 // ---- tunables ----
@@ -167,6 +171,9 @@ static V3 s_ldir[NLIGHTS];     // light directions
 static int s_ltight;           // env blob tightness (squarings)
 static V3 s_body;              // glass body / tint colour
 static V3 s_absorb;            // Beer-Lambert coefficients
+#if GC_THIN_REFRACT
+static V3 s_thin_att;          // precomputed exp(-absorb * slab) for thin-slab refraction
+#endif
 static float s_rough;          // glossy jitter (high = soft natural reflections)
 static float s_reflstr;        // reflection strength
 static float s_obl;            // oblique view angle this minute (radians)
@@ -354,6 +361,9 @@ static V3 env_lights(V3 d) {
 // blit dims the bare background so contrast is preserved while the glass shows
 // the rich pattern bent through it.
 static V3 env_scene(V3 d) {
+#if GC_BENCH
+  s_bench_env++;
+#endif
   float gt = clampf_i(0.5f * (d.y + 1.0f), 0.0f, 1.0f);
   V3 c = vlerp(s_bg0, s_bg1, gt);
 
@@ -525,9 +535,11 @@ static V3 trace_pixel(int idx) {
 #if GC_THIN_REFRACT
     // Single-surface thin-slab approximation: sample the scene along the entry-
     // refracted ray and attenuate by a fixed slab thickness — no interior march,
-    // no exit normal, no second refraction.
-    float dGlass = THIN_GLASS_LEN;
+    // no exit normal, no second refraction. Because the slab length is constant,
+    // the Beer-Lambert attenuation is constant per minute (precomputed in
+    // render_restart) — saving 3 exp() per sample, the cost model's top hit.
     V3 exitdir = T0;
+    V3 att = s_thin_att;
 #else
     V3 ip = vadd(p, vscale(T0, EPS * 2.0f));
     float ti = 0.0f;
@@ -544,9 +556,9 @@ static V3 trace_pixel(int idx) {
     int tir2;
     V3 T1 = refract_v(T0, Ne, ETA_OUT, &tir2);
     V3 exitdir = tir2 ? reflect_v(T0, Ne) : T1;
-#endif
     V3 att = v3(fast_exp_neg(s_absorb.x * dGlass), fast_exp_neg(s_absorb.y * dGlass),
                 fast_exp_neg(s_absorb.z * dGlass));
+#endif
     trans = vmul(env_scene(glossy(exitdir, rh, s_rough)), att);
   }
 
@@ -739,6 +751,8 @@ void render_restart(const char *hhmm) {
   srand(777);
   hhmm = "1027";
   s_bench_evals = 0;
+  g_bench_trans = 0;
+  s_bench_env = 0;
 #endif
   for (int k = 0; k < 4; k++) {
     uint8_t mask = DIGIT_SEG[hhmm[k] - '0'];
@@ -816,6 +830,13 @@ void render_restart(const char *hhmm) {
     s_transw = 0.34f;
   }
 
+#if GC_THIN_REFRACT
+  // Thin-slab path length is constant, so the Beer-Lambert attenuation is too —
+  // precompute it once here instead of 3 exp() per sample.
+  s_thin_att = v3(fast_exp_neg(s_absorb.x * THIN_GLASS_LEN), fast_exp_neg(s_absorb.y * THIN_GLASS_LEN),
+                  fast_exp_neg(s_absorb.z * THIN_GLASS_LEN));
+#endif
+
   // Randomised environment pattern for the glass to refract/reflect.
   s_ptype = rand() % 3;
   s_pax = rand_dir();
@@ -831,6 +852,8 @@ void render_restart(const char *hhmm) {
   s_bench_geom = s_bench_evals; // evals spent on the per-minute geometry/coverage pass
   s_bench_evals = 0;            // from here on, count only progressive shading evals
   s_bench_samples = 0;
+  g_bench_trans = 0; // count only progressive-shading transcendentals + env calls
+  s_bench_env = 0;
 #endif
 
   // Seed pass 0 so the whole image is present immediately: digit cores in the

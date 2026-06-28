@@ -54,13 +54,16 @@ static void anim_cb(void *ctx) {
   if ((++s_ticks % BLIT_EVERY) == 0) layer_mark_dirty(s_layer);
 #if GC_BENCH
   (void)s_bench_logged;
-  if ((s_ticks % 80) == 0 && render_passes() >= 3) { // periodic; ratio stable after a few passes
+  if ((s_ticks % 80) == 0 && render_passes() >= 3) { // periodic; ratios stable after a few passes
     unsigned long sm = render_bench_samples(), ev = render_bench_evals();
-    // evals/sample ×100 (integer, avoids float in the log).
-    unsigned long eps100 = sm ? (ev * 100UL) / sm : 0;
+    unsigned long tr = render_bench_trans(), en = render_bench_env();
+    // per-sample x100 (integer, avoids float in the log): SDF evals, transcendentals, env calls.
+    unsigned long eps = sm ? (ev * 100UL) / sm : 0;
+    unsigned long tps = sm ? (tr * 100UL) / sm : 0;
+    unsigned long ens = sm ? (en * 100UL) / sm : 0;
     APP_LOG(APP_LOG_LEVEL_INFO,
-            "BENCH p%d ticks=%d geom_evals=%lu shade_evals=%lu samples=%lu evals/sample(x100)=%lu heap=%d",
-            render_passes(), s_ticks, render_bench_geom_evals(), ev, sm, eps100, (int)heap_bytes_free());
+            "BENCH p%d samples=%lu evals/s(x100)=%lu trans/s(x100)=%lu env/s(x100)=%lu geom_evals=%lu heap=%d",
+            render_passes(), sm, eps, tps, ens, render_bench_geom_evals(), (int)heap_bytes_free());
   }
 #endif
   if (render_passes() < MAX_PASSES) {

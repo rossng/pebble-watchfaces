@@ -47,4 +47,6 @@ int render_passes(void);
 unsigned long render_bench_evals(void);    // map_active() calls since last reset
 unsigned long render_bench_samples(void);  // trace_pixel() calls since last reset
 unsigned long render_bench_geom_evals(void); // map_active() calls in the per-minute geometry pass
+unsigned long render_bench_env(void);      // env_scene() calls since last reset (shading-float proxy)
+unsigned long render_bench_trans(void);    // transcendentals (rsqrt/sin/exp) since last reset
 #endif

@@ -7,6 +7,15 @@
 // approximations stay in the caller's frame and never touch libm.
 #pragma once
 
+// Bench cost model: count transcendentals (the priciest soft-float ops on this
+// no-FPU core). Compiled out unless GC_BENCH (defined in render.h, included first).
+#if defined(GC_BENCH) && GC_BENCH
+extern unsigned long g_bench_trans;
+#define GC_TRANS() (g_bench_trans++)
+#else
+#define GC_TRANS()
+#endif
+
 // Branch-free-ish absolute value (single instruction at -O2; never libm).
 static inline float fabs_i(float x) { return x < 0.0f ? -x : x; }
 
@@ -18,6 +27,7 @@ static inline float maxf_i(float a, float b) { return a > b ? a : b; }
 
 // Fast inverse square root (two Newton steps — plenty for shading/geometry).
 static inline float fast_rsqrt(float x) {
+  GC_TRANS();
   union {
     float f;
     int i;
@@ -57,6 +67,7 @@ static inline float fract1(float x) {
 // path. This reduces the angle to [-pi, pi] by hand, then uses the classic
 // Bhaskara-style parabola with one refinement step (~0.1% error).
 static inline float fast_sin(float x) {
+  GC_TRANS();
   const float TWO_PI = 6.2831853f, INV_TWO_PI = 0.15915494f;
   x -= TWO_PI * (float)((int)(x * INV_TWO_PI + (x >= 0.0f ? 0.5f : -0.5f)));
   float ax = x < 0.0f ? -x : x;
@@ -69,6 +80,7 @@ static inline float fast_cos(float x) { return fast_sin(x + 1.5707963f); }
 // e^-x for x >= 0 (Beer-Lambert absorption). 1/(Taylor of e^x), clamped — the
 // glass paths are short so x stays small; this is monotonic and never negative.
 static inline float fast_exp_neg(float x) {
+  GC_TRANS();
   if (x < 0.0f) x = 0.0f;
   if (x > 8.0f) return 0.000335f;
   float v = 1.0f + x * (1.0f + x * (0.5f + x * (0.16666667f + x * 0.04166667f)));
