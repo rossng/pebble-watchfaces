@@ -78,6 +78,22 @@ unsigned long render_bench_geom_evals(void) { return s_bench_geom; }
 #define DEPTH_HI 5.6f
 #define DEPTH_RANGE (DEPTH_HI - DEPTH_LO)
 
+// ---- fidelity-affecting speculative toggles (A/B with these) ----
+// #1 Normal-from-depth: for deferred (cached) pixels, reconstruct the primary
+// normal from neighbouring cached depths (screen-space cross product) instead of
+// the 4-tap SDF gradient. Saves 4 SDF evals/sample but yields the geometric
+// surface normal (and is sensitive to the 1-byte depth quantization), so it can
+// look slightly flatter/noisier — hence a toggle. Falls back to the SDF gradient
+// at pixels whose neighbours aren't all cached.
+#define GC_NORMAL_FROM_DEPTH 1
+// #4 Thin-slab refraction: replace the interior march + exit-surface normal +
+// second refraction with a single-surface approximation (entry-refracted ray
+// samples the scene, fixed slab thickness for Beer-Lambert). Saves the whole
+// interior march + a 4-tap normal per sample, at the cost of physically-accurate
+// two-surface distortion. The glass is chunky/stylised so it largely holds.
+#define GC_THIN_REFRACT 1
+#define THIN_GLASS_LEN (2.0f * HZ) // approximate path length through the slab
+
 // Contrast enforcement (driven by the 2D stencil in the blit). Kept gentle so it
 // guarantees a legibility floor + a dark background WITHOUT washing out the glass
 // colour: a dark glass pixel is lifted just enough to read, never to flat cream.
@@ -98,6 +114,9 @@ static inline V3 vsub(V3 a, V3 b) { return v3(a.x - b.x, a.y - b.y, a.z - b.z); 
 static inline V3 vscale(V3 a, float s) { return v3(a.x * s, a.y * s, a.z * s); }
 static inline V3 vmul(V3 a, V3 b) { return v3(a.x * b.x, a.y * b.y, a.z * b.z); }
 static inline float vdot(V3 a, V3 b) { return a.x * b.x + a.y * b.y + a.z * b.z; }
+static inline V3 vcross(V3 a, V3 b) {
+  return v3(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x);
+}
 static inline V3 vnorm(V3 a) { return vscale(a, fast_rsqrt(vdot(a, a) + 1e-20f)); }
 static inline V3 vlerp(V3 a, V3 b, float t) {
   return v3(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, a.z + (b.z - a.z) * t);
@@ -390,6 +409,26 @@ static int march_active(V3 ro, V3 dir, float t_enter, float t_exit, const int *a
   return 0;
 }
 
+#if GC_NORMAL_FROM_DEPTH
+// Reconstruct the surface normal at a cached interior pixel from neighbouring
+// cached depths (screen-space central differences), avoiding the 4-tap SDF
+// gradient. Returns 0 if any 4-neighbour is off-screen or uncached, so the
+// caller falls back to calc_normal. Sign is irrelevant — the caller flips N to
+// face the ray. Quality depends on the depth-cache precision (see GC_NORMAL_FROM_DEPTH).
+static int normal_from_depth(int ix, int iy, V3 *outN) {
+  if (ix <= 0 || ix >= s_RW - 1 || iy <= 0 || iy >= s_RH - 1) return 0;
+  uint8_t ql = s_pdepth[iy * s_RW + (ix - 1)], qr = s_pdepth[iy * s_RW + (ix + 1)];
+  uint8_t qu = s_pdepth[(iy - 1) * s_RW + ix], qd = s_pdepth[(iy + 1) * s_RW + ix];
+  if (!ql || !qr || !qu || !qd) return 0;
+  V3 pl = vscale(primary_dir(ix - 1, iy, 0.0f, 0.0f), depth_dequantize(ql));
+  V3 pr = vscale(primary_dir(ix + 1, iy, 0.0f, 0.0f), depth_dequantize(qr));
+  V3 pu = vscale(primary_dir(ix, iy - 1, 0.0f, 0.0f), depth_dequantize(qu));
+  V3 pd = vscale(primary_dir(ix, iy + 1, 0.0f, 0.0f), depth_dequantize(qd));
+  *outN = vnorm(vcross(vsub(pr, pl), vsub(pd, pu)));
+  return 1;
+}
+#endif
+
 // Trace one sample; returns linear RGB (unbounded, clamped by caller). All
 // stochastic jitter (subpixel AA, glossy lobes) is now driven by low-discrepancy
 // sequences keyed on (pixel, pass), so no per-call RNG state is needed.
@@ -449,7 +488,12 @@ static V3 trace_pixel(int idx) {
   }
   V3 p = vadd(ro, vscale(dir, t));
 
-  V3 N = calc_normal(p, act, nact);
+  V3 N;
+#if GC_NORMAL_FROM_DEPTH
+  if (!(q && normal_from_depth(ix, iy, &N))) N = calc_normal(p, act, nact);
+#else
+  N = calc_normal(p, act, nact);
+#endif
   if (vdot(N, dir) > 0.0f) N = vscale(N, -1.0f);
   float cosi = -vdot(N, dir);
   if (cosi < 0.0f) cosi = 0.0f;
@@ -477,6 +521,14 @@ static V3 trace_pixel(int idx) {
   V3 T0 = refract_v(dir, N, ETA_IN, &tir);
   V3 trans = v3(0, 0, 0);
   if (!tir) {
+    unsigned int rh = hash_u32((unsigned int)idx * 2654435761u + 0x85ebu);
+#if GC_THIN_REFRACT
+    // Single-surface thin-slab approximation: sample the scene along the entry-
+    // refracted ray and attenuate by a fixed slab thickness — no interior march,
+    // no exit normal, no second refraction.
+    float dGlass = THIN_GLASS_LEN;
+    V3 exitdir = T0;
+#else
     V3 ip = vadd(p, vscale(T0, EPS * 2.0f));
     float ti = 0.0f;
     V3 ep = ip;
@@ -492,11 +544,10 @@ static V3 trace_pixel(int idx) {
     int tir2;
     V3 T1 = refract_v(T0, Ne, ETA_OUT, &tir2);
     V3 exitdir = tir2 ? reflect_v(T0, Ne) : T1;
+#endif
     V3 att = v3(fast_exp_neg(s_absorb.x * dGlass), fast_exp_neg(s_absorb.y * dGlass),
                 fast_exp_neg(s_absorb.z * dGlass));
-    trans =
-        vmul(env_scene(glossy(exitdir, hash_u32((unsigned int)idx * 2654435761u + 0x85ebu), s_rough)),
-             att);
+    trans = vmul(env_scene(glossy(exitdir, rh, s_rough)), att);
   }
 
   // Body-tinted core dominates the digit's colour; the patterned scene shows
